@@ -81,11 +81,10 @@ export function TripWizard() {
     );
   }, []);
 
-  const handleTripDone = useCallback(() => {
+  const handleTripDone = useCallback(async () => {
     if (!originAddr || !destAddr) return;
 
-    addTrip({
-      id: crypto.randomUUID(),
+    await addTrip({
       originLabel: originAddr.label,
       destinationLabel: destAddr.label,
       originCoords: originAddr.coordinates,

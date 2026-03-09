@@ -5,12 +5,18 @@ import { TripWizard } from "@/components/trip-wizard/trip-wizard";
 import { LiveDashboard } from "@/components/live-view/live-dashboard";
 
 function AppContent() {
-  const { isSetupDone } = useTrips();
+  const { isSetupDone, loading } = useTrips();
 
   return (
     <main className="min-h-screen max-w-lg mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold text-primary mb-6">Tehoreitit</h1>
-      {isSetupDone ? <LiveDashboard /> : <TripWizard />}
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Ladataan...</p>
+      ) : isSetupDone ? (
+        <LiveDashboard />
+      ) : (
+        <TripWizard />
+      )}
     </main>
   );
 }
