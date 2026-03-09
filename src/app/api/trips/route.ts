@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const trips = await getPrisma().trip.findMany({
+    where: { userId: session.user.id },
     orderBy: { createdAt: "asc" },
   });
 
@@ -21,10 +28,16 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await request.json();
 
   const trip = await getPrisma().trip.create({
     data: {
+      userId: session.user.id,
       originLabel: body.originLabel,
       destinationLabel: body.destinationLabel,
       originLat: body.originCoords.latitude,
