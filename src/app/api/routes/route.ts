@@ -1,0 +1,25 @@
+import { NextRequest, NextResponse } from "next/server";
+import { fetchRoutes } from "@/lib/digitransit";
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const { origin, destination, numItineraries } = body;
+
+  if (!origin || !destination) {
+    return NextResponse.json(
+      { error: "origin and destination required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const connections = await fetchRoutes(origin, destination, numItineraries || 5);
+    return NextResponse.json({ connections });
+  } catch (error) {
+    console.error("Route fetch error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to fetch routes" },
+      { status: 500 }
+    );
+  }
+}
