@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 type WizardStep = "address" | "results" | "done";
 
 export function TripWizard() {
-  const { trips, addTrip, finishSetup } = useTrips();
+  const { trips, addTrip, removeTrip, finishSetup } = useTrips();
   const [step, setStep] = useState<WizardStep>("address");
   const [originAddr, setOriginAddr] = useState<GeocodedAddress | null>(null);
   const [destAddr, setDestAddr] = useState<GeocodedAddress | null>(null);
@@ -123,7 +123,7 @@ export function TripWizard() {
           <div className="space-y-2">
             <p className="text-sm font-medium">Tallennetut matkat:</p>
             {trips.map((t) => (
-              <TripSummary key={t.id} trip={t} />
+              <TripSummary key={t.id} trip={t} onRemove={removeTrip} />
             ))}
           </div>
         )}
@@ -152,7 +152,7 @@ export function TripWizard() {
         <div className="space-y-2">
           <p className="text-sm font-medium">Tallennetut matkat:</p>
           {trips.map((t) => (
-            <TripSummary key={t.id} trip={t} />
+            <TripSummary key={t.id} trip={t} onRemove={removeTrip} />
           ))}
         </div>
       )}

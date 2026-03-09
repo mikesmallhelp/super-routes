@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 
 interface LiveTripCardProps {
   trip: SavedTrip;
+  onRemove: (id: string) => void;
 }
 
-export function LiveTripCard({ trip }: LiveTripCardProps) {
+export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
   const { connections, isLoading, error } = useLiveRoutes(trip);
 
   return (
@@ -18,6 +19,13 @@ export function LiveTripCard({ trip }: LiveTripCardProps) {
         <h3 className="font-semibold text-sm">
           {trip.originLabel} → {trip.destinationLabel}
         </h3>
+        <button
+          onClick={() => onRemove(trip.id)}
+          className="text-muted-foreground hover:text-destructive text-lg leading-none px-1"
+          aria-label="Poista matka"
+        >
+          ×
+        </button>
       </div>
       {trip.selectedVehicles.length > 0 && (
         <div className="flex flex-wrap gap-1">

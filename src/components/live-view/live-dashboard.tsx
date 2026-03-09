@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 export function LiveDashboard() {
-  const { trips, goBackToSetup } = useTrips();
+  const { trips, removeTrip, goBackToSetup } = useTrips();
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export function LiveDashboard() {
       </div>
 
       {trips.map((trip) => (
-        <LiveTripCard key={trip.id} trip={trip} />
+        <LiveTripCard key={trip.id} trip={trip} onRemove={removeTrip} />
       ))}
     </div>
   );
