@@ -3,16 +3,39 @@
 import { useTrips } from "@/components/providers/trips-provider";
 import { LiveTripCard } from "./live-trip-card";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useGeolocation, distanceMeters } from "@/hooks/use-geolocation";
 
 export function LiveDashboard() {
   const { trips, removeTrip, goBackToSetup } = useTrips();
   const [now, setNow] = useState(new Date());
+  const userPos = useGeolocation();
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const sortedTrips = useMemo(() => {
+    if (!userPos) {
+      console.log("[LiveDashboard] Ei sijaintia saatavilla, ei järjestetä");
+      return trips;
+    }
+    console.log("[LiveDashboard] Käyttäjän sijainti:", {
+      lat: userPos.latitude,
+      lon: userPos.longitude,
+    });
+    const withDistances = trips.map((trip) => {
+      const dist = distanceMeters(
+        userPos.latitude, userPos.longitude,
+        trip.originCoords.latitude, trip.originCoords.longitude
+      );
+      console.log(`[LiveDashboard] ${trip.originLabel} → ${Math.round(dist)} m`);
+      return { trip, dist };
+    });
+    withDistances.sort((a, b) => a.dist - b.dist);
+    return withDistances.map((d) => d.trip);
+  }, [trips, userPos]);
 
   return (
     <div className="space-y-6">
@@ -29,7 +52,7 @@ export function LiveDashboard() {
         </Button>
       </div>
 
-      {trips.map((trip) => (
+      {sortedTrips.map((trip) => (
         <LiveTripCard key={trip.id} trip={trip} onRemove={removeTrip} />
       ))}
     </div>

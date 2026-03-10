@@ -5,7 +5,7 @@ const GEOCODE_URL = "https://api.digitransit.fi/geocoding/v1/search";
 const ROUTING_URL = "https://api.digitransit.fi/routing/v2/hsl/gtfs/v1";
 
 function log(label: string, data: unknown) {
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.DIGITRANSIT_LOG === "true") {
     console.log(`[Digitransit] ${label}:`, JSON.stringify(data, null, 2));
   }
 }
