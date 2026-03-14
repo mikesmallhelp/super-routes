@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Super Routes
 
-## Getting Started
+A public transport route planner for the HSL area (Helsinki region). Save your favorite routes and monitor real-time connections sorted by your current location.
 
-First, run the development server:
+![](doc/picture1.png)
+![](doc/picture2.png)
+![](doc/picture3.png)
+![](doc/picture4.png)
+![](doc/picture5.png)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Tech stack
+
+- **Next.js 16** (App Router) + **React 19**
+- **Tailwind CSS 4** + **shadcn/ui**
+- **Prisma ORM** (PostgreSQL)
+- **NextAuth.js** (Google OAuth)
+- **Digitransit API** (routing and geocoding)
+- **SWR** (real-time data fetching)
+
+## Configuration
+
+Create a `.env.local` file in the project root:
+
+```env
+DIGITRANSIT_API_KEY=your_api_key
+PRISMA_DATABASE_URL=your_postgres_connection_string
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+AUTH_SECRET=your_nextauth_secret
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Digitransit API key
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Register at https://portal-api.digitransit.fi/
+2. Copy the API key to `DIGITRANSIT_API_KEY`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Google authentication
 
-## Learn More
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Navigate to **APIs & Services** > **Credentials**
+4. Create an **OAuth 2.0 Client ID** (type: Web application)
+5. Add **Authorized JavaScript origins**: `http://localhost:3000` (and your production URL)
+5. Add **Authorized redirect URIs**: `http://localhost:3000/api/auth/callback/google` (and your production URL)
+6. Copy the Client ID and Client Secret to `.env.local`
 
-To learn more about Next.js, take a look at the following resources:
+Generate `AUTH_SECRET` with:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx auth secret
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Database
 
-## Deploy on Vercel
+Prisma requires a PostgreSQL database. Run migrations:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx prisma db push
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Development
+
+```bash
+npm install
+npm run dev
+```
+
+The app starts at http://localhost:3000.
+
+## Production deployment
+
+The recommended platform is **Vercel**. It has native Next.js support and handles builds, edge functions, and environment variables automatically.
