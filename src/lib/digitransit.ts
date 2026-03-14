@@ -10,6 +10,51 @@ function log(label: string, data: unknown) {
   }
 }
 
+const AUTOCOMPLETE_URL = "https://api.digitransit.fi/geocoding/v1/autocomplete";
+
+const HSL_MUNICIPALITIES = new Set([
+  "Helsinki",
+  "Espoo",
+  "Vantaa",
+  "Kauniainen",
+  "Siuntio",
+  "Kirkkonummi",
+  "Sipoo",
+  "Kerava",
+  "Tuusula",
+]);
+
+export async function autocompleteAddress(
+  text: string
+): Promise<{ label: string; lat: number; lon: number }[]> {
+  if (!text || text.length < 2) return [];
+
+  const url = `${AUTOCOMPLETE_URL}?text=${encodeURIComponent(text)}&size=20&lang=fi&boundary.rect.min_lat=60.0&boundary.rect.max_lat=60.6&boundary.rect.min_lon=24.0&boundary.rect.max_lon=25.2`;
+  log("Autocomplete request", { text, url });
+
+  const res = await fetch(url, {
+    headers: { "digitransit-subscription-key": API_KEY },
+  });
+  const data = await res.json();
+  log("Autocomplete response", data);
+
+  const features = data.features || [];
+  return features
+    .filter(
+      (f: { properties: { localadmin?: string; locality?: string } }) => {
+        const municipality = f.properties.localadmin || f.properties.locality;
+        return municipality && HSL_MUNICIPALITIES.has(municipality);
+      }
+    )
+    .slice(0, 5)
+    .map(
+      (f: { properties: { label: string }; geometry: { coordinates: number[] } }) => {
+        const [lon, lat] = f.geometry.coordinates;
+        return { label: f.properties.label, lat, lon };
+      }
+    );
+}
+
 export async function geocodeAddress(
   text: string
 ): Promise<{ label: string; lat: number; lon: number } | null> {

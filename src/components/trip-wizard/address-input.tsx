@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, startTransition } from "react";
-import { Input } from "@/components/ui/input";
+import { useState, useRef, startTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { AddressAutocomplete } from "./address-autocomplete";
 import type { GeocodedAddress } from "@/lib/types";
 
 interface AddressInputProps {
   onSearch: (origin: GeocodedAddress, destination: GeocodedAddress) => void;
+}
+
+interface ResolvedAddress {
+  label: string;
+  lat: number;
+  lon: number;
 }
 
 export function AddressInput({ onSearch }: AddressInputProps) {
@@ -14,6 +20,19 @@ export function AddressInput({ onSearch }: AddressInputProps) {
   const [destination, setDestination] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const originResolved = useRef<ResolvedAddress | null>(null);
+  const destResolved = useRef<ResolvedAddress | null>(null);
+
+  async function geocodeFallback(
+    text: string
+  ): Promise<ResolvedAddress | null> {
+    const res = await fetch(
+      `/api/geocode?text=${encodeURIComponent(text.trim())}`
+    );
+    if (!res.ok) return null;
+    return res.json();
+  }
 
   async function handleSearch() {
     if (!origin.trim() || !destination.trim()) {
@@ -25,29 +44,29 @@ export function AddressInput({ onSearch }: AddressInputProps) {
     setError("");
 
     try {
-      // async-parallel: fetch both addresses in parallel
-      const [originRes, destRes] = await Promise.all([
-        fetch(`/api/geocode?text=${encodeURIComponent(origin.trim())}`),
-        fetch(`/api/geocode?text=${encodeURIComponent(destination.trim())}`),
+      // Use resolved addresses from autocomplete, or fall back to geocode
+      const [originData, destData] = await Promise.all([
+        originResolved.current ?? geocodeFallback(origin),
+        destResolved.current ?? geocodeFallback(destination),
       ]);
 
-      if (!originRes.ok) {
+      if (!originData) {
         setError(`Lähtöpistettä "${origin}" ei löytynyt`);
         return;
       }
-      if (!destRes.ok) {
+      if (!destData) {
         setError(`Loppupistettä "${destination}" ei löytynyt`);
         return;
       }
-
-      const originData = await originRes.json();
-      const destData = await destRes.json();
 
       startTransition(() => {
         onSearch(
           {
             label: originData.label,
-            coordinates: { latitude: originData.lat, longitude: originData.lon },
+            coordinates: {
+              latitude: originData.lat,
+              longitude: originData.lon,
+            },
           },
           {
             label: destData.label,
@@ -64,24 +83,32 @@ export function AddressInput({ onSearch }: AddressInputProps) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Lähtöpiste</label>
-        <Input
-          placeholder="esim. Kaivokatu 1"
-          value={origin}
-          onChange={(e) => setOrigin(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-        />
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Loppupiste</label>
-        <Input
-          placeholder="esim. Nuuksiontie 84"
-          value={destination}
-          onChange={(e) => setDestination(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-        />
-      </div>
+      <AddressAutocomplete
+        label="Lähtöpiste"
+        placeholder="esim. Kaivokatu 1"
+        value={origin}
+        onChange={(v) => {
+          setOrigin(v);
+          originResolved.current = null;
+        }}
+        onSelect={(s) => {
+          originResolved.current = s;
+        }}
+        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+      />
+      <AddressAutocomplete
+        label="Loppupiste"
+        placeholder="esim. Nuuksiontie 84"
+        value={destination}
+        onChange={(v) => {
+          setDestination(v);
+          destResolved.current = null;
+        }}
+        onSelect={(s) => {
+          destResolved.current = s;
+        }}
+        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+      />
       {error && <p className="text-destructive text-sm">{error}</p>}
       <Button onClick={handleSearch} disabled={loading} className="w-full">
         {loading ? "Haetaan..." : "Hae reitit"}
