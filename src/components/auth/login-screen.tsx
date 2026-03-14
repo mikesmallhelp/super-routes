@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +17,12 @@ export function LoginScreen() {
           <Button onClick={() => signIn("google")} className="w-full">
             Kirjaudu Google-tilillä
           </Button>
+          <p className="text-xs text-muted-foreground">
+            Kirjautumalla hyväksyt{" "}
+            <Link href="/privacy" className="underline hover:text-foreground">
+              tietosuojaselosteen
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>
