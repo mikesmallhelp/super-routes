@@ -139,7 +139,7 @@ export function TripWizard() {
             className="flex-1"
             disabled={trips.length === 0}
           >
-            Näytä reitit
+            Näytä reaaliaikaiset reitit
           </Button>
         </div>
       </div>
@@ -171,7 +171,7 @@ export function TripWizard() {
               variant="secondary"
               className="w-full"
             >
-              Näytä reitit
+              Näytä reaaliaikaiset reitit
             </Button>
           )}
         </>
