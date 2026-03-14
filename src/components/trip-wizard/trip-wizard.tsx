@@ -108,16 +108,6 @@ export function TripWizard() {
     const lastTrip = trips[trips.length - 1];
     return (
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Jatkossa sinulle esitetään reaaliaikaisia aikatauluja reitillä{" "}
-          <strong>{lastTrip.originLabel}</strong> →{" "}
-          <strong>{lastTrip.destinationLabel}</strong>
-          {lastTrip.selectedVehicles.length > 0 && (
-            <>, jotka käyttävät liikennevälineitä{" "}
-              <strong>{lastTrip.selectedVehicles.join(" ja ")}</strong></>
-          )}
-          .
-        </p>
 
         {trips.length > 0 && (
           <div className="space-y-2">

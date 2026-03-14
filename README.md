@@ -6,7 +6,6 @@ A public transport route planner for the HSL area (Helsinki region). Save your f
 ![](doc/picture2.png)
 ![](doc/picture3.png)
 ![](doc/picture4.png)
-![](doc/picture5.png)
 
 ## Tech stack
 
