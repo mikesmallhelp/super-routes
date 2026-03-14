@@ -20,7 +20,7 @@ export function VehicleFilter({
     <div className="space-y-4">
       <div>
         <p className="text-sm font-medium mb-2">
-          Valitse liikennevälineet, jotka haluat esiintyvän reitissä:
+          Voit valita liikennevälineet, jotka esiintyvät reitissä:
         </p>
         <div className="flex flex-wrap gap-2">
           {allVehicles.map((v) => {
