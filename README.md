@@ -52,7 +52,7 @@ npx auth secret
 
 ### Database
 
-Prisma requires a PostgreSQL database. Run migrations:
+Prisma requires a PostgreSQL database. You can easily create one for both development and production via the Vercel dashboard. Run migrations:
 
 ```bash
 npx prisma db push
