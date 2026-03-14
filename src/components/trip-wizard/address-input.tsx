@@ -36,7 +36,7 @@ export function AddressInput({ onSearch }: AddressInputProps) {
 
   async function handleSearch() {
     if (!origin.trim() || !destination.trim()) {
-      setError("Syötä sekä lähtöpiste että loppupiste");
+      setError("Syötä sekä lähtöpaikka että määränpää");
       return;
     }
 
@@ -51,11 +51,11 @@ export function AddressInput({ onSearch }: AddressInputProps) {
       ]);
 
       if (!originData) {
-        setError(`Lähtöpistettä "${origin}" ei löytynyt`);
+        setError(`Lähtöpaikkaa "${origin}" ei löytynyt`);
         return;
       }
       if (!destData) {
-        setError(`Loppupistettä "${destination}" ei löytynyt`);
+        setError(`Määränpäätä "${destination}" ei löytynyt`);
         return;
       }
 
@@ -84,7 +84,7 @@ export function AddressInput({ onSearch }: AddressInputProps) {
   return (
     <div className="space-y-4">
       <AddressAutocomplete
-        label="Lähtöpiste"
+        label="Lähtöpaikka"
         placeholder="esim. Kaivokatu 1"
         value={origin}
         onChange={(v) => {
@@ -97,7 +97,7 @@ export function AddressInput({ onSearch }: AddressInputProps) {
         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
       />
       <AddressAutocomplete
-        label="Loppupiste"
+        label="Määränpää"
         placeholder="esim. Nuuksiontie 84"
         value={destination}
         onChange={(v) => {
