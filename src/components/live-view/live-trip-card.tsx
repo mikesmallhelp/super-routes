@@ -11,7 +11,7 @@ interface LiveTripCardProps {
 }
 
 export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
-  const { connections, isLoading, error } = useLiveRoutes(trip);
+  const { connections, isLoading, isValidating, error } = useLiveRoutes(trip);
 
   return (
     <div className="space-y-3">
@@ -39,6 +39,10 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
 
       {isLoading && (
         <p className="text-sm text-muted-foreground">Ladataan reittejä...</p>
+      )}
+
+      {!isLoading && isValidating && (
+        <p className="text-sm text-muted-foreground">Päivitetään...</p>
       )}
 
       {error && (

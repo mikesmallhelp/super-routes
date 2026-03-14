@@ -36,17 +36,16 @@ function filterConnections(
 }
 
 export function useLiveRoutes(trip: SavedTrip) {
-  const { data, error, isLoading } = useSWR(
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
     `live-routes-${trip.id}`,
     () => fetchTripRoutes(trip),
     {
-      refreshInterval: 30000,
-      revalidateOnFocus: true,
-      dedupingInterval: 10000,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
     }
   );
 
   const filtered = data ? filterConnections(data, trip.selectedVehicles) : [];
 
-  return { connections: filtered, allConnections: data || [], error, isLoading };
+  return { connections: filtered, allConnections: data || [], error, isLoading, isValidating, mutate };
 }
