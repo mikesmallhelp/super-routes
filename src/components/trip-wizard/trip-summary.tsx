@@ -28,7 +28,8 @@ export function TripSummary({ trip, onRemove }: TripSummaryProps) {
           )}
         </div>
         {trip.selectedVehicles.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
+          <div className="flex flex-wrap items-center gap-1 mt-2">
+            <span className="text-xs text-muted-foreground">Valitut liikennevälineet:</span>
             {trip.selectedVehicles.map((v) => (
               <Badge key={v} variant="default" className="text-xs">
                 {v}
