@@ -128,7 +128,7 @@ export function TripWizard() {
           </div>
         )}
 
-        <p className="text-sm font-medium">Haluatko lisätä toisen matkan?</p>
+        <p className="text-sm font-medium">Haluatko lisätä uuden matkan?</p>
         <div className="flex gap-2">
           <Button onClick={handleNewTrip} className="flex-1">
             Lisää matka
