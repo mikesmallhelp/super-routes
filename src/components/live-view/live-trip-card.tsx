@@ -27,14 +27,17 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
           ×
         </button>
       </div>
-      {trip.selectedVehicles.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+      {trip.selectedVehicles.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-xs text-muted-foreground">Valitut liikennevälineet:</span>
           {trip.selectedVehicles.map((v) => (
             <Badge key={v} variant="default" className="text-xs">
               {v}
             </Badge>
           ))}
         </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Kaikki liikennevälineet</p>
       )}
 
       {isLoading && (
