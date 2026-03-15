@@ -68,7 +68,7 @@ export function ConnectionCard({ connection, index, highlightVehicles = [] }: Co
                   </span>
                   {shortName && (
                     <Badge
-                      variant={isHighlighted ? "default" : "secondary"}
+                      variant="secondary"
                       className="text-xs shrink-0"
                     >
                       {shortName}
