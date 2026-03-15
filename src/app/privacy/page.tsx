@@ -70,11 +70,8 @@ export default function PrivacyPage() {
             Tietojen säilytys
           </h2>
           <p>
-            Tiedot säilytetään PostgreSQL-tietokannassa, joka voi sijaita
-            EU:n ulkopuolella. Palveluntarjoajat (Vercel, Google) voivat
-            käsitellä tietoja myös Yhdysvalloissa. Siirrot perustuvat
-            EU–US Data Privacy Frameworkiin. Tietoja käsitellään EU:n
-            tietosuoja-asetuksen (GDPR) mukaisesti.
+            Henkilötietoja säilytetään Neonin EU-alueella sijaitsevassa tietokannassa. 
+            Vercel ja Google voivat käsitellä tietoja myös Yhdysvalloissa EU-US-tietosuojamekanismien (mm. SCC ja DPA) nojalla.
           </p>
         </section>
       </div>
