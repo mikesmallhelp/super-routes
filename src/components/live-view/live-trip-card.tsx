@@ -79,7 +79,8 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
           key={`${conn.start}-${i}`}
           connection={conn}
           index={i + 1}
-          highlightVehicles={trip.selectedVehicles}
+          originLabel={trip.originLabel}
+          destinationLabel={trip.destinationLabel}
         />
       ))}
     </div>

@@ -79,6 +79,8 @@ export function TripWizard() {
           body: JSON.stringify({
             origin: origin.coordinates,
             destination: dest.coordinates,
+            originLabel: origin.label,
+            destinationLabel: dest.label,
             numItineraries: 5,
           }),
         });
@@ -225,7 +227,8 @@ export function TripWizard() {
                   key={i}
                   connection={conn}
                   index={i + 1}
-                  highlightVehicles={includedVehicles}
+                  originLabel={originAddr?.label}
+                  destinationLabel={destAddr?.label}
                 />
               ))}
             </div>

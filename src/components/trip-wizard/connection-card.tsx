@@ -26,10 +26,16 @@ function modeIcon(mode: string) {
 interface ConnectionCardProps {
   connection: Connection;
   index: number;
-  highlightVehicles?: string[];
+  originLabel?: string;
+  destinationLabel?: string;
 }
 
-export function ConnectionCard({ connection, index, highlightVehicles = [] }: ConnectionCardProps) {
+export function ConnectionCard({
+  connection,
+  index,
+  originLabel,
+  destinationLabel,
+}: ConnectionCardProps) {
   return (
     <Card className="w-full">
       <CardContent className="p-4">
@@ -39,17 +45,20 @@ export function ConnectionCard({ connection, index, highlightVehicles = [] }: Co
         <div className="space-y-1">
           {connection.legs.map((leg, i) => {
             const shortName = leg.trip?.routeShortName;
-            const isHighlighted = shortName && highlightVehicles.includes(shortName);
 
             if (leg.mode === "WALK") {
+              const walkFrom = i === 0 ? (originLabel || leg.from.name) : leg.from.name;
+              const walkTo =
+                i === connection.legs.length - 1 ? (destinationLabel || leg.to.name) : leg.to.name;
+
               return (
                 <div key={i} className="flex items-center gap-2 text-muted-foreground text-sm py-1">
                   <span>{modeIcon("WALK")}</span>
                   <span className="flex-1">
-                    {i === 0 && leg.from.name}
+                    {i === 0 && walkFrom}
                     {i === 0 ? " → " : ""}
                     Kävely
-                    {i === connection.legs.length - 1 ? ` → ${leg.to.name}` : ""}
+                    {i === connection.legs.length - 1 ? ` → ${walkTo}` : ""}
                   </span>
                   <span className="tabular-nums">
                     {i === 0 && formatTime(leg.start.scheduledTime)}
