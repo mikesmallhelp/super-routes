@@ -2,10 +2,10 @@
 
 A public transport route planner for the HSL area (Helsinki region). Save your favorite routes and monitor real-time connections sorted by your current location.
 
-![](doc/picture1.jpg)
-![](doc/picture2.jpg)
-![](doc/picture3.jpg)
-![](doc/picture4.jpg)
+![](doc/picture1.png)
+![](doc/picture2.png)
+![](doc/picture3.png)
+![](doc/picture4.png)
 
 ## Tech stack
 
