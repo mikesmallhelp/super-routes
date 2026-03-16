@@ -67,9 +67,11 @@ model Trip {
   originLon        Float
   destLat          Float
   destLon          Float
-  selectedVehicles String[]
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  selectedVehicles  String[]
+  excludedVehicles  String[]  @default([])
+  vehicleFilterMode String    @default("and")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([userId])
 }

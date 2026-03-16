@@ -39,6 +39,14 @@ export interface Connection {
   legs: Leg[];
 }
 
+export type VehicleFilterMode = "and" | "or";
+
+export interface VehicleFilter {
+  include: string[];
+  exclude: string[];
+  mode: VehicleFilterMode;
+}
+
 export interface SavedTrip {
   id: string;
   originLabel: string;
@@ -46,4 +54,6 @@ export interface SavedTrip {
   originCoords: Coordinates;
   destinationCoords: Coordinates;
   selectedVehicles: string[];
+  excludedVehicles: string[];
+  vehicleFilterMode: VehicleFilterMode;
 }

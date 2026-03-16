@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import type { GeocodedAddress, Connection } from "@/lib/types";
+import type { GeocodedAddress, Connection, VehicleFilterMode } from "@/lib/types";
 import { useTrips } from "@/components/providers/trips-provider";
 import { AddressInput } from "./address-input";
 import { ConnectionCard } from "./connection-card";
@@ -10,6 +10,7 @@ import { TripSummary } from "./trip-summary";
 import { Button } from "@/components/ui/button";
 
 type WizardStep = "address" | "results" | "done";
+type VehicleState = "none" | "include" | "exclude";
 
 export function TripWizard() {
   const { trips, addTrip, removeTrip, finishSetup } = useTrips();
@@ -17,7 +18,8 @@ export function TripWizard() {
   const [originAddr, setOriginAddr] = useState<GeocodedAddress | null>(null);
   const [destAddr, setDestAddr] = useState<GeocodedAddress | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
+  const [vehicleStates, setVehicleStates] = useState<Record<string, VehicleState>>({});
+  const [filterMode, setFilterMode] = useState<VehicleFilterMode>("and");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -31,15 +33,35 @@ export function TripWizard() {
     return Array.from(set).sort();
   }, [connections]);
 
+  const includedVehicles = useMemo(
+    () => Object.entries(vehicleStates).filter(([, s]) => s === "include").map(([v]) => v),
+    [vehicleStates]
+  );
+
+  const excludedVehicles = useMemo(
+    () => Object.entries(vehicleStates).filter(([, s]) => s === "exclude").map(([v]) => v),
+    [vehicleStates]
+  );
+
   const filteredConnections = useMemo(() => {
-    if (selectedVehicles.length === 0) return connections;
+    if (includedVehicles.length === 0 && excludedVehicles.length === 0)
+      return connections;
     return connections.filter((conn) => {
       const vehiclesInConn = conn.legs
         .filter((leg) => leg.trip?.routeShortName)
         .map((leg) => leg.trip!.routeShortName);
-      return selectedVehicles.every((v) => vehiclesInConn.includes(v));
+
+      if (excludedVehicles.some((v) => vehiclesInConn.includes(v)))
+        return false;
+
+      if (includedVehicles.length === 0) return true;
+      if (filterMode === "and") {
+        return includedVehicles.every((v) => vehiclesInConn.includes(v));
+      } else {
+        return includedVehicles.some((v) => vehiclesInConn.includes(v));
+      }
     });
-  }, [connections, selectedVehicles]);
+  }, [connections, includedVehicles, excludedVehicles, filterMode]);
 
   const handleSearch = useCallback(
     async (origin: GeocodedAddress, dest: GeocodedAddress) => {
@@ -47,7 +69,8 @@ export function TripWizard() {
       setDestAddr(dest);
       setLoading(true);
       setError("");
-      setSelectedVehicles([]);
+      setVehicleStates({});
+      setFilterMode("and");
 
       try {
         const res = await fetch("/api/routes", {
@@ -73,12 +96,19 @@ export function TripWizard() {
     []
   );
 
-  const handleToggleVehicle = useCallback((vehicle: string) => {
-    setSelectedVehicles((prev) =>
-      prev.includes(vehicle)
-        ? prev.filter((v) => v !== vehicle)
-        : [...prev, vehicle]
-    );
+  const handleCycleVehicle = useCallback((vehicle: string) => {
+    setVehicleStates((prev) => {
+      const current = prev[vehicle] ?? "none";
+      const next: VehicleState =
+        current === "none" ? "include" : current === "include" ? "exclude" : "none";
+      const updated = { ...prev };
+      if (next === "none") {
+        delete updated[vehicle];
+      } else {
+        updated[vehicle] = next;
+      }
+      return updated;
+    });
   }, []);
 
   const handleTripDone = useCallback(async () => {
@@ -89,26 +119,27 @@ export function TripWizard() {
       destinationLabel: destAddr.label,
       originCoords: originAddr.coordinates,
       destinationCoords: destAddr.coordinates,
-      selectedVehicles,
+      selectedVehicles: includedVehicles,
+      excludedVehicles,
+      vehicleFilterMode: filterMode,
     });
 
     setStep("done");
-  }, [originAddr, destAddr, selectedVehicles, addTrip]);
+  }, [originAddr, destAddr, includedVehicles, excludedVehicles, filterMode, addTrip]);
 
   const handleNewTrip = useCallback(() => {
     setStep("address");
     setOriginAddr(null);
     setDestAddr(null);
     setConnections([]);
-    setSelectedVehicles([]);
+    setVehicleStates({});
+    setFilterMode("and");
     setError("");
   }, []);
 
   if (step === "done") {
-    const lastTrip = trips[trips.length - 1];
     return (
       <div className="space-y-4">
-
         {trips.length > 0 && (
           <div className="space-y-2">
             <p className="text-sm font-medium">Tallennetut matkat:</p>
@@ -175,8 +206,11 @@ export function TripWizard() {
 
           <VehicleFilter
             allVehicles={allVehicles}
-            selectedVehicles={selectedVehicles}
-            onToggleVehicle={handleToggleVehicle}
+            includedVehicles={includedVehicles}
+            excludedVehicles={excludedVehicles}
+            filterMode={filterMode}
+            onCycleVehicle={handleCycleVehicle}
+            onSetFilterMode={setFilterMode}
             onFinish={handleTripDone}
           />
 
@@ -191,7 +225,7 @@ export function TripWizard() {
                   key={i}
                   connection={conn}
                   index={i + 1}
-                  highlightVehicles={selectedVehicles}
+                  highlightVehicles={includedVehicles}
                 />
               ))}
             </div>

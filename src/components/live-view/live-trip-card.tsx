@@ -12,6 +12,9 @@ interface LiveTripCardProps {
 
 export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
   const { connections, isLoading, isValidating, error } = useLiveRoutes(trip);
+  const hasIncluded = trip.selectedVehicles.length > 0;
+  const hasExcluded = (trip.excludedVehicles ?? []).length > 0;
+  const mode = trip.vehicleFilterMode ?? "and";
 
   return (
     <div className="space-y-3">
@@ -27,16 +30,29 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
           ×
         </button>
       </div>
-      {trip.selectedVehicles.length > 0 ? (
+      {hasIncluded && (
         <div className="flex flex-wrap items-center gap-1">
-          <span className="text-xs text-muted-foreground">Valitut liikennevälineet:</span>
+          <span className="text-xs text-muted-foreground">
+            {mode === "and" ? "Kaikki:" : "Jokin:"}
+          </span>
           {trip.selectedVehicles.map((v) => (
-            <Badge key={v} variant="default" className="text-xs">
+            <Badge key={v} variant="default" className="text-xs bg-green-600">
               {v}
             </Badge>
           ))}
         </div>
-      ) : (
+      )}
+      {hasExcluded && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-xs text-muted-foreground">Ei sisällä:</span>
+          {trip.excludedVehicles.map((v) => (
+            <Badge key={v} variant="default" className="text-xs bg-red-600 line-through">
+              {v}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {!hasIncluded && !hasExcluded && (
         <p className="text-xs text-muted-foreground">Kaikki liikennevälineet</p>
       )}
 

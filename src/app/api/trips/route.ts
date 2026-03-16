@@ -22,6 +22,8 @@ export async function GET() {
     originCoords: { latitude: t.originLat, longitude: t.originLon },
     destinationCoords: { latitude: t.destLat, longitude: t.destLon },
     selectedVehicles: t.selectedVehicles,
+    excludedVehicles: t.excludedVehicles,
+    vehicleFilterMode: t.vehicleFilterMode as "and" | "or",
   }));
 
   return NextResponse.json(mapped);
@@ -45,6 +47,8 @@ export async function POST(request: NextRequest) {
       destLat: body.destinationCoords.latitude,
       destLon: body.destinationCoords.longitude,
       selectedVehicles: body.selectedVehicles,
+      excludedVehicles: body.excludedVehicles ?? [],
+      vehicleFilterMode: body.vehicleFilterMode ?? "and",
     },
   });
 
@@ -55,5 +59,7 @@ export async function POST(request: NextRequest) {
     originCoords: { latitude: trip.originLat, longitude: trip.originLon },
     destinationCoords: { latitude: trip.destLat, longitude: trip.destLon },
     selectedVehicles: trip.selectedVehicles,
+    excludedVehicles: trip.excludedVehicles,
+    vehicleFilterMode: trip.vehicleFilterMode as "and" | "or",
   });
 }
