@@ -1,6 +1,7 @@
 "use client";
 
 import type { ActiveLeg } from "@/lib/route-detection";
+import type { StopOnRoute } from "@/lib/route-detection";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -15,6 +16,50 @@ function modeIcon(mode: string) {
   }
 }
 
+type VisibleEntry =
+  | { type: "stop"; stop: StopOnRoute; index: number }
+  | { type: "gap"; hiddenCount: number };
+
+/**
+ * Build a compact view:
+ * - First passed stop + ... + two previous + current + two next + ... + final stop
+ */
+function buildVisibleEntries(stops: StopOnRoute[]): VisibleEntry[] {
+  const currentIdx = stops.findIndex((s) => s.status === "current");
+  if (currentIdx === -1) {
+    return stops.map((s, i) => ({ type: "stop", stop: s, index: i }));
+  }
+
+  const n = stops.length;
+  const visible = new Set<number>();
+
+  // First + two before current
+  if (currentIdx > 0) {
+    visible.add(0);
+    if (currentIdx - 2 >= 0) visible.add(currentIdx - 2);
+    if (currentIdx - 1 >= 0) visible.add(currentIdx - 1);
+  }
+  // Current
+  visible.add(currentIdx);
+  // Two after + final
+  if (currentIdx < n - 1) {
+    if (currentIdx + 1 < n) visible.add(currentIdx + 1);
+    if (currentIdx + 2 < n) visible.add(currentIdx + 2);
+    visible.add(n - 1);
+  }
+
+  const sorted = [...visible].sort((a, b) => a - b);
+  const entries: VisibleEntry[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0) {
+      const gap = sorted[i] - sorted[i - 1] - 1;
+      if (gap > 0) entries.push({ type: "gap", hiddenCount: gap });
+    }
+    entries.push({ type: "stop", stop: stops[sorted[i]], index: sorted[i] });
+  }
+  return entries;
+}
+
 interface StopListProps {
   activeLeg: ActiveLeg;
 }
@@ -23,6 +68,7 @@ export function StopList({ activeLeg }: StopListProps) {
   const { leg, stops } = activeLeg;
   const shortName = leg.trip?.routeShortName;
   const headsign = leg.trip?.tripHeadsign;
+  const entries = buildVisibleEntries(stops);
 
   return (
     <Card className="w-full border-blue-400 border-2">
@@ -41,44 +87,62 @@ export function StopList({ activeLeg }: StopListProps) {
         </div>
 
         <div className="relative ml-3">
-          {/* Vertical line */}
           <div className="absolute left-[5px] top-2 bottom-2 w-0.5 bg-muted-foreground/30" />
 
           <div className="space-y-0">
-            {stops.map((stop, i) => (
-              <div
-                key={`${stop.code}-${i}`}
-                className={`flex items-center gap-3 py-1.5 relative ${
-                  stop.status === "passed" ? "opacity-40" : ""
-                }`}
-              >
-                {/* Stop dot */}
-                <div
-                  className={`w-3 h-3 rounded-full border-2 shrink-0 z-10 ${
-                    stop.status === "current"
-                      ? "bg-blue-500 border-blue-600 ring-2 ring-blue-300"
-                      : stop.status === "passed"
-                      ? "bg-muted-foreground border-muted-foreground"
-                      : "bg-background border-muted-foreground"
-                  }`}
-                />
-
-                {/* Stop info */}
-                <div className="flex-1 min-w-0">
-                  <span
-                    className={`text-sm truncate block ${
-                      stop.status === "current" ? "font-bold text-blue-600" : ""
-                    }`}
+            {entries.map((entry, i) => {
+              if (entry.type === "gap") {
+                return (
+                  <div
+                    key={`gap-${i}`}
+                    className="flex items-center gap-3 py-1.5 relative opacity-50"
                   >
-                    {stop.name}
+                    <div className="w-3 flex flex-col items-center gap-0.5 z-10 bg-card">
+                      <div className="w-1 h-1 rounded-full bg-muted-foreground" />
+                      <div className="w-1 h-1 rounded-full bg-muted-foreground" />
+                      <div className="w-1 h-1 rounded-full bg-muted-foreground" />
+                    </div>
+                    <span className="text-xs text-muted-foreground italic">
+                      {entry.hiddenCount} välipysäkkiä
+                    </span>
+                  </div>
+                );
+              }
+
+              const { stop, index } = entry;
+              return (
+                <div
+                  key={`stop-${index}`}
+                  className={`flex items-center gap-3 py-1.5 relative ${
+                    stop.status === "passed" ? "opacity-40" : ""
+                  }`}
+                >
+                  <div
+                    className={`w-3 h-3 rounded-full border-2 shrink-0 z-10 ${
+                      stop.status === "current"
+                        ? "bg-blue-500 border-blue-600 ring-2 ring-blue-300"
+                        : stop.status === "passed"
+                        ? "bg-muted-foreground border-muted-foreground"
+                        : "bg-background border-muted-foreground"
+                    }`}
+                  />
+
+                  <div className="flex-1 min-w-0">
+                    <span
+                      className={`text-sm truncate block ${
+                        stop.status === "current" ? "font-bold text-blue-600" : ""
+                      }`}
+                    >
+                      {stop.name}
+                    </span>
+                  </div>
+
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {stop.code}
                   </span>
                 </div>
-
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {stop.code}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </CardContent>
