@@ -1,9 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
 import type { SavedTrip } from "@/lib/types";
 import { useLiveRoutes } from "@/hooks/use-live-routes";
 import { ConnectionCard } from "@/components/trip-wizard/connection-card";
+import { StopList } from "./stop-list";
+import { UpcomingArrivals } from "./upcoming-arrivals";
 import { Badge } from "@/components/ui/badge";
+import { detectActiveLeg, findUpcomingArrivals } from "@/lib/route-detection";
+import { useGeolocation } from "@/hooks/use-geolocation";
 
 interface LiveTripCardProps {
   trip: SavedTrip;
@@ -11,10 +16,25 @@ interface LiveTripCardProps {
 }
 
 export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
-  const { connections, isLoading, isValidating, error } = useLiveRoutes(trip);
+  const { connections, pastConnections, isLoading, isValidating, error } = useLiveRoutes(trip);
   const hasIncluded = trip.selectedVehicles.length > 0;
   const hasExcluded = (trip.excludedVehicles ?? []).length > 0;
   const mode = trip.vehicleFilterMode ?? "and";
+  const userPos = useGeolocation();
+
+  // Detect if user is on a route (uses past connections)
+  const activeLeg = useMemo(() => {
+    if (!userPos || pastConnections.length === 0) return null;
+    return detectActiveLeg(pastConnections, userPos.latitude, userPos.longitude);
+  }, [pastConnections, userPos]);
+
+  // Find upcoming arrivals at nearby stops
+  const upcomingArrivals = useMemo(() => {
+    if (!userPos) return [];
+    // Use both current and past connections for arrival detection
+    const allConns = [...connections, ...pastConnections];
+    return findUpcomingArrivals(allConns, userPos.latitude, userPos.longitude);
+  }, [connections, pastConnections, userPos]);
 
   return (
     <div className="space-y-3">
@@ -68,21 +88,35 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
         <p className="text-destructive text-sm">Virhe ladattaessa reittejä.</p>
       )}
 
-      {!isLoading && connections.length === 0 && !error && (
-        <p className="text-sm text-muted-foreground">
-          Ei reittivaihtoehtoja juuri nyt.
-        </p>
+      {/* Active route tracking - shown when user is on a vehicle */}
+      {activeLeg && (
+        <StopList activeLeg={activeLeg} />
       )}
 
-      {connections.map((conn, i) => (
-        <ConnectionCard
-          key={`${conn.start}-${i}`}
-          connection={conn}
-          index={i + 1}
-          originLabel={trip.originLabel}
-          destinationLabel={trip.destinationLabel}
-        />
-      ))}
+      {/* Upcoming arrivals at nearby stops */}
+      {!activeLeg && upcomingArrivals.length > 0 && (
+        <UpcomingArrivals arrivals={upcomingArrivals} />
+      )}
+
+      {!activeLeg && (
+        <>
+          {!isLoading && connections.length === 0 && !error && (
+            <p className="text-sm text-muted-foreground">
+              Ei reittivaihtoehtoja juuri nyt.
+            </p>
+          )}
+
+          {connections.map((conn, i) => (
+            <ConnectionCard
+              key={`${conn.start}-${i}`}
+              connection={conn}
+              index={i + 1}
+              originLabel={trip.originLabel}
+              destinationLabel={trip.destinationLabel}
+            />
+          ))}
+        </>
+      )}
     </div>
   );
 }

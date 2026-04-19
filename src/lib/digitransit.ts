@@ -116,9 +116,11 @@ query PlanConnection(
           }
           start { scheduledTime }
           end { scheduledTime }
+          intermediateStops { name code lat lon }
           trip {
             tripHeadsign
             routeShortName
+            gtfsId
           }
         }
       }
@@ -130,9 +132,10 @@ query PlanConnection(
 export async function fetchRoutes(
   origin: Coordinates,
   destination: Coordinates,
-  numItineraries: number = 5
+  numItineraries: number = 5,
+  dateTime?: string
 ): Promise<Connection[]> {
-  const now = new Date().toISOString();
+  const now = dateTime || new Date().toISOString();
   const variables = {
     originLat: origin.latitude,
     originLon: origin.longitude,
