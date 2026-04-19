@@ -5,6 +5,10 @@ import { LiveTripCard } from "./live-trip-card";
 import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useState } from "react";
 import { useGeolocation, distanceMeters } from "@/hooks/use-geolocation";
+import { SCENARIO_INTERVAL_MS } from "@/lib/mock-data";
+
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
+const REFRESH_INTERVAL_MS = USE_MOCK ? SCENARIO_INTERVAL_MS : 30_000;
 
 export function LiveDashboard() {
   const { trips, removeTrip, goBackToSetup } = useTrips();
@@ -13,7 +17,7 @@ export function LiveDashboard() {
 
   // Track auto-refresh timestamp (matches SWR 30s interval)
   useEffect(() => {
-    const interval = setInterval(() => setLastUpdated(new Date()), 30_000);
+    const interval = setInterval(() => setLastUpdated(new Date()), REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 

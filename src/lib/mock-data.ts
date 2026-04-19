@@ -37,7 +37,11 @@ const SCENARIOS: MockScenario[] = [
   { progressMin: 15, userLat: 60.263692, userLon: 24.859619, label: "560: Ojahaantie" },
 ];
 
-const SCENARIO_INTERVAL_MS = 30_000;
+export const SCENARIO_INTERVAL_MS = (() => {
+  const v = process.env.NEXT_PUBLIC_MOCK_INTERVAL_MS;
+  const parsed = v ? parseInt(v, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30_000;
+})();
 let startTime: number | null = null;
 
 function getScenarioIndex(): number {

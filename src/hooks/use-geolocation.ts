@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getMockUserPosition, getMockScenarioLabel } from "@/lib/mock-data";
+import { getMockUserPosition, getMockScenarioLabel, SCENARIO_INTERVAL_MS } from "@/lib/mock-data";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
 
@@ -21,7 +21,9 @@ export function useGeolocation() {
         setPosition(pos);
       };
       update();
-      const interval = setInterval(update, 5_000);
+      // Poll faster than scenario interval to stay in sync (min 500ms, max 5s)
+      const pollInterval = Math.max(500, Math.min(5_000, Math.floor(SCENARIO_INTERVAL_MS / 6)));
+      const interval = setInterval(update, pollInterval);
       return () => clearInterval(interval);
     }
 

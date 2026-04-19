@@ -2,9 +2,10 @@
 
 import useSWR from "swr";
 import type { Connection, SavedTrip, VehicleFilterMode } from "@/lib/types";
-import { generateMockConnections } from "@/lib/mock-data";
+import { generateMockConnections, SCENARIO_INTERVAL_MS } from "@/lib/mock-data";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
+const REFRESH_INTERVAL_MS = USE_MOCK ? SCENARIO_INTERVAL_MS : 30_000;
 
 interface RoutesResponse {
   connections: Connection[];
@@ -79,7 +80,7 @@ export function useLiveRoutes(trip: SavedTrip) {
     `live-routes-${trip.id}`,
     () => fetchTripRoutes(trip),
     {
-      refreshInterval: 30_000,
+      refreshInterval: REFRESH_INTERVAL_MS,
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
     }
