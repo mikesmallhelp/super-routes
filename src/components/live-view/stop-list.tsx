@@ -18,7 +18,7 @@ function modeIcon(mode: string) {
 
 type VisibleEntry =
   | { type: "stop"; stop: StopOnRoute; index: number }
-  | { type: "gap"; hiddenCount: number };
+  | { type: "gap"; hiddenCount: number; section: "passed" | "upcoming" };
 
 /**
  * Build a compact view:
@@ -53,7 +53,11 @@ function buildVisibleEntries(stops: StopOnRoute[]): VisibleEntry[] {
   for (let i = 0; i < sorted.length; i++) {
     if (i > 0) {
       const gap = sorted[i] - sorted[i - 1] - 1;
-      if (gap > 0) entries.push({ type: "gap", hiddenCount: gap });
+      if (gap > 0) {
+        const section: "passed" | "upcoming" =
+          sorted[i] <= currentIdx ? "passed" : "upcoming";
+        entries.push({ type: "gap", hiddenCount: gap, section });
+      }
     }
     entries.push({ type: "stop", stop: stops[sorted[i]], index: sorted[i] });
   }
@@ -102,9 +106,11 @@ export function StopList({ activeLeg }: StopListProps) {
                       <div className="w-1 h-1 rounded-full bg-muted-foreground" />
                       <div className="w-1 h-1 rounded-full bg-muted-foreground" />
                     </div>
-                    <span className="text-xs text-muted-foreground italic">
-                      {entry.hiddenCount} välipysäkkiä
-                    </span>
+                    {entry.section === "upcoming" && (
+                      <span className="text-xs text-muted-foreground italic">
+                        {entry.hiddenCount} välipysäkkiä
+                      </span>
+                    )}
                   </div>
                 );
               }
