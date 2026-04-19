@@ -21,20 +21,24 @@ interface MockScenario {
 }
 
 const SCENARIOS: MockScenario[] = [
-  // On bus 530, approaching Iskostie from various stops
-  { progressMin: 0,  userLat: 60.250577, userLon: 24.764382, label: "530: Huvilamäki" },
-  { progressMin: 1,  userLat: 60.253682, userLon: 24.775001, label: "530: Jupperinympyrä" },
-  { progressMin: 2,  userLat: 60.25474,  userLon: 24.78064,  label: "530: Linnaistentie" },
-  { progressMin: 3,  userLat: 60.25537,  userLon: 24.80147,  label: "530: Terhotie" },
-  { progressMin: 4,  userLat: 60.254197, userLon: 24.815768, label: "530: Koivuvaarankuja" },
-  { progressMin: 5,  userLat: 60.25561,  userLon: 24.82723,  label: "530: Vapaalanpolku" },
+  // On bus 530, progressing through every stop toward Iskostie
+  { progressMin: 0,   userLat: 60.250577, userLon: 24.764382, label: "530: Huvilamäki" },
+  { progressMin: 0.5, userLat: 60.253682, userLon: 24.775001, label: "530: Jupperinympyrä" },
+  { progressMin: 1,   userLat: 60.25474,  userLon: 24.78064,  label: "530: Linnaistentie" },
+  { progressMin: 1.5, userLat: 60.25537,  userLon: 24.80147,  label: "530: Terhotie" },
+  { progressMin: 2,   userLat: 60.255369, userLon: 24.808008, label: "530: Pähkinärinteentie" },
+  { progressMin: 2.5, userLat: 60.254197, userLon: 24.815768, label: "530: Koivuvaarankuja" },
+  { progressMin: 3,   userLat: 60.253851, userLon: 24.822685, label: "530: Köysikuja" },
+  { progressMin: 3.5, userLat: 60.25561,  userLon: 24.82723,  label: "530: Vapaalanpolku" },
+  { progressMin: 4,   userLat: 60.258998, userLon: 24.836402, label: "530: Lastutie" },
+  { progressMin: 4.5, userLat: 60.25903,  userLon: 24.844529, label: "530: Raappavuorentie" },
   // Arriving at transfer point
-  { progressMin: 6,  userLat: 60.25907,  userLon: 24.852743, label: "530 saapuu Iskostielle" },
-  // Waiting for bus 560
-  { progressMin: 8,  userLat: 60.25907,  userLon: 24.852743, label: "Odottaa 560 Iskostiellä" },
+  { progressMin: 5.5, userLat: 60.25907,  userLon: 24.852743, label: "530 saapuu Iskostielle" },
+  // Waiting for bus 560 (530 ended, 560 not yet started)
+  { progressMin: 9,   userLat: 60.25907,  userLon: 24.852743, label: "Odottaa 560 Iskostiellä" },
   // On bus 560
-  { progressMin: 13, userLat: 60.260899, userLon: 24.8567,   label: "560: Myyrmäen asema" },
-  { progressMin: 15, userLat: 60.263692, userLon: 24.859619, label: "560: Ojahaantie" },
+  { progressMin: 13,  userLat: 60.260899, userLon: 24.8567,   label: "560: Myyrmäen asema" },
+  { progressMin: 15,  userLat: 60.263692, userLon: 24.859619, label: "560: Ojahaantie" },
 ];
 
 export const SCENARIO_INTERVAL_MS = (() => {
