@@ -6,8 +6,9 @@ import { useLiveRoutes } from "@/hooks/use-live-routes";
 import { ConnectionCard } from "@/components/trip-wizard/connection-card";
 import { StopList } from "./stop-list";
 import { UpcomingArrivals } from "./upcoming-arrivals";
+import { LegCard } from "./leg-card";
 import { Badge } from "@/components/ui/badge";
-import { detectActiveLeg, findUpcomingArrivals } from "@/lib/route-detection";
+import { detectJourneyState } from "@/lib/route-detection";
 import { useGeolocation } from "@/hooks/use-geolocation";
 
 interface LiveTripCardProps {
@@ -22,19 +23,13 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
   const mode = trip.vehicleFilterMode ?? "and";
   const userPos = useGeolocation();
 
-  // Detect if user is on a route (uses past connections)
-  const activeLeg = useMemo(() => {
+  const journeyState = useMemo(() => {
     if (!userPos || pastConnections.length === 0) return null;
-    return detectActiveLeg(pastConnections, userPos.latitude, userPos.longitude);
+    return detectJourneyState(pastConnections, userPos.latitude, userPos.longitude);
   }, [pastConnections, userPos]);
 
-  // Find upcoming arrivals at nearby stops
-  const upcomingArrivals = useMemo(() => {
-    if (!userPos) return [];
-    // Use both current and past connections for arrival detection
-    const allConns = [...connections, ...pastConnections];
-    return findUpcomingArrivals(allConns, userPos.latitude, userPos.longitude);
-  }, [connections, pastConnections, userPos]);
+  const activeConnection =
+    journeyState ? pastConnections[journeyState.connectionIndex] : null;
 
   return (
     <div className="space-y-3">
@@ -88,17 +83,24 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
         <p className="text-destructive text-sm">Virhe ladattaessa reittejä.</p>
       )}
 
-      {/* Active route tracking - shown when user is on a vehicle */}
-      {activeLeg && (
-        <StopList activeLeg={activeLeg} />
-      )}
+      {journeyState && activeConnection ? (
+        <div className="space-y-2">
+          {activeConnection.legs.slice(0, journeyState.legIndex).map((leg, i) => (
+            <LegCard key={`past-${i}`} leg={leg} variant="past" />
+          ))}
 
-      {/* Upcoming arrivals at nearby stops */}
-      {!activeLeg && upcomingArrivals.length > 0 && (
-        <UpcomingArrivals arrivals={upcomingArrivals} />
-      )}
+          {journeyState.mode === "on-vehicle" && journeyState.activeLeg && (
+            <StopList activeLeg={journeyState.activeLeg} />
+          )}
+          {journeyState.mode === "waiting" && journeyState.upcomingArrival && (
+            <UpcomingArrivals arrivals={[journeyState.upcomingArrival]} />
+          )}
 
-      {!activeLeg && (
+          {activeConnection.legs.slice(journeyState.legIndex + 1).map((leg, i) => (
+            <LegCard key={`future-${i}`} leg={leg} variant="future" />
+          ))}
+        </div>
+      ) : (
         <>
           {!isLoading && connections.length === 0 && !error && (
             <p className="text-sm text-muted-foreground">
