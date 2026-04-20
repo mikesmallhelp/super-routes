@@ -91,11 +91,31 @@ export const SCENARIO_INTERVAL_MS = (() => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 30_000;
 })();
 let startTime: number | null = null;
+let pausedElapsed: number | null = null;
+
+function getElapsed(): number {
+  if (startTime === null) startTime = Date.now();
+  if (pausedElapsed !== null) return pausedElapsed;
+  return Date.now() - startTime;
+}
 
 function getScenarioIndex(): number {
-  if (startTime === null) startTime = Date.now();
-  const elapsed = Date.now() - startTime;
-  return Math.floor(elapsed / SCENARIO_INTERVAL_MS) % SCENARIOS.length;
+  return Math.floor(getElapsed() / SCENARIO_INTERVAL_MS) % SCENARIOS.length;
+}
+
+export function pauseMock(): void {
+  if (pausedElapsed !== null) return;
+  pausedElapsed = getElapsed();
+}
+
+export function resumeMock(): void {
+  if (pausedElapsed === null) return;
+  startTime = Date.now() - pausedElapsed;
+  pausedElapsed = null;
+}
+
+export function isMockPaused(): boolean {
+  return pausedElapsed !== null;
 }
 
 function getCurrentScenario(): MockScenario {
