@@ -38,7 +38,7 @@ export function UpcomingTripCard({ leg }: UpcomingTripCardProps) {
   if (leg.to.stop) stops.push({ name: leg.to.stop.name, code: leg.to.stop.code });
 
   return (
-    <Card className="w-full border-green-400 border-2">
+    <Card className="w-full border-blue-400 border-2">
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-3">
           <span>{modeIcon(leg.mode)}</span>

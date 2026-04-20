@@ -75,7 +75,7 @@ export function StopList({ activeLeg }: StopListProps) {
   const entries = buildVisibleEntries(stops);
 
   return (
-    <Card className="w-full border-blue-400 border-2">
+    <Card className="w-full border-green-400 border-2">
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-3">
           <span>{modeIcon(leg.mode)}</span>
@@ -87,7 +87,7 @@ export function StopList({ activeLeg }: StopListProps) {
           {headsign && (
             <span className="text-sm text-muted-foreground">→ {headsign}</span>
           )}
-          <span className="ml-auto text-xs text-blue-600 font-medium">Matkalla</span>
+          <span className="ml-auto text-xs text-green-700 font-medium">Matkalla</span>
         </div>
 
         <div className="relative ml-3">
@@ -126,7 +126,7 @@ export function StopList({ activeLeg }: StopListProps) {
                   <div
                     className={`w-3 h-3 rounded-full border-2 shrink-0 z-10 ${
                       stop.status === "current"
-                        ? "bg-blue-500 border-blue-600 ring-2 ring-blue-300"
+                        ? "bg-green-500 border-green-600 ring-2 ring-green-300"
                         : stop.status === "passed"
                         ? "bg-muted-foreground border-muted-foreground"
                         : "bg-background border-muted-foreground"
@@ -136,7 +136,7 @@ export function StopList({ activeLeg }: StopListProps) {
                   <div className="flex-1 min-w-0">
                     <span
                       className={`text-sm truncate block ${
-                        stop.status === "current" ? "font-bold text-blue-600" : ""
+                        stop.status === "current" ? "font-bold text-green-700" : ""
                       }`}
                     >
                       {stop.name}

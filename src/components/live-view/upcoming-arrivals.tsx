@@ -31,9 +31,9 @@ export function UpcomingArrivals({ arrivals }: UpcomingArrivalsProps) {
   }
 
   return (
-    <Card className="w-full border-green-400 border-2">
+    <Card className="w-full border-blue-400 border-2">
       <CardContent className="p-4">
-        <div className="text-sm font-semibold text-green-700 mb-3">
+        <div className="text-sm font-semibold text-blue-700 mb-3">
           Saapuu pysäkille
         </div>
 
