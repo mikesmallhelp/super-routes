@@ -5,7 +5,14 @@ import { LiveTripCard } from "./live-trip-card";
 import { Button } from "@/components/ui/button";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGeolocation, distanceMeters } from "@/hooks/use-geolocation";
-import { SCENARIO_INTERVAL_MS, pauseMock, resumeMock, isMockPaused } from "@/lib/mock-data";
+import {
+  SCENARIO_INTERVAL_MS,
+  pauseMock,
+  resumeMock,
+  isMockPaused,
+  stepMockForward,
+  stepMockBackward,
+} from "@/lib/mock-data";
 import { useSWRConfig } from "swr";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
@@ -25,6 +32,11 @@ export function LiveDashboard() {
     return () => clearInterval(interval);
   }, [isPaused]);
 
+  const triggerRefresh = useCallback(() => {
+    mutate((key: string) => typeof key === "string" && key.startsWith("live-routes-"));
+    setLastUpdated(new Date());
+  }, [mutate]);
+
   const togglePause = useCallback(() => {
     if (isPaused) {
       resumeMock();
@@ -33,10 +45,18 @@ export function LiveDashboard() {
       pauseMock();
       setIsPaused(true);
     }
-    // Force immediate refresh so display reflects new state
-    mutate((key: string) => typeof key === "string" && key.startsWith("live-routes-"));
-    setLastUpdated(new Date());
-  }, [isPaused, mutate]);
+    triggerRefresh();
+  }, [isPaused, triggerRefresh]);
+
+  const stepBack = useCallback(() => {
+    stepMockBackward();
+    triggerRefresh();
+  }, [triggerRefresh]);
+
+  const stepForward = useCallback(() => {
+    stepMockForward();
+    triggerRefresh();
+  }, [triggerRefresh]);
 
   const sortedTrips = useMemo(() => {
     if (!userPos) {
@@ -70,6 +90,28 @@ export function LiveDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
+          {USE_MOCK && isPaused && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={stepBack}
+                aria-label="Edellinen skenaario"
+                className="border-2 border-amber-500 bg-amber-100 text-amber-900 hover:bg-amber-200 hover:text-amber-900 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900"
+              >
+                ⏮
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={stepForward}
+                aria-label="Seuraava skenaario"
+                className="border-2 border-amber-500 bg-amber-100 text-amber-900 hover:bg-amber-200 hover:text-amber-900 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900"
+              >
+                ⏭
+              </Button>
+            </>
+          )}
           {USE_MOCK && (
             <Button
               variant="outline"

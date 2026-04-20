@@ -118,6 +118,22 @@ export function isMockPaused(): boolean {
   return pausedElapsed !== null;
 }
 
+/** Step to next scenario (only works when paused) */
+export function stepMockForward(): void {
+  if (pausedElapsed === null) return;
+  pausedElapsed += SCENARIO_INTERVAL_MS;
+}
+
+/** Step to previous scenario (only works when paused) */
+export function stepMockBackward(): void {
+  if (pausedElapsed === null) return;
+  pausedElapsed -= SCENARIO_INTERVAL_MS;
+  // Keep non-negative by wrapping to end of cycle
+  if (pausedElapsed < 0) {
+    pausedElapsed += SCENARIOS.length * SCENARIO_INTERVAL_MS;
+  }
+}
+
 function getCurrentScenario(): MockScenario {
   return SCENARIOS[getScenarioIndex()];
 }
