@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildStopList } from "@/lib/route-detection";
 import { usePreviousDeparture } from "@/hooks/use-previous-departure";
+import { useNow } from "@/hooks/use-now";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fi-FI", {
@@ -39,8 +40,9 @@ export function UpcomingTripCard({ leg }: UpcomingTripCardProps) {
     leg.start.scheduledTime
   );
   const prevTime = prevDep.realtimeTime ?? prevDep.scheduledTime;
+  const now = useNow();
   const prevMinutesAgo = prevTime
-    ? Math.round((Date.now() - new Date(prevTime).getTime()) / 60_000)
+    ? Math.round((now - new Date(prevTime).getTime()) / 60_000)
     : null;
 
   return (

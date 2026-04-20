@@ -10,8 +10,18 @@ interface GeoPosition {
   longitude: number;
 }
 
+function initialPosition(): GeoPosition | null {
+  if (USE_MOCK) return null;
+  const devLat = process.env.NEXT_PUBLIC_DEV_LAT;
+  const devLon = process.env.NEXT_PUBLIC_DEV_LON;
+  if (devLat && devLon) {
+    return { latitude: parseFloat(devLat), longitude: parseFloat(devLon) };
+  }
+  return null;
+}
+
 export function useGeolocation() {
-  const [position, setPosition] = useState<GeoPosition | null>(null);
+  const [position, setPosition] = useState<GeoPosition | null>(initialPosition);
 
   useEffect(() => {
     if (USE_MOCK) {
@@ -20,20 +30,17 @@ export function useGeolocation() {
         console.log(`[Geolocation] Mock: ${getMockScenarioLabel()}`, pos);
         setPosition(pos);
       };
-      update();
       // Poll faster than scenario interval to stay in sync (min 500ms, max 5s)
       const pollInterval = Math.max(500, Math.min(5_000, Math.floor(SCENARIO_INTERVAL_MS / 6)));
+      update();
       const interval = setInterval(update, pollInterval);
       return () => clearInterval(interval);
     }
 
-    // Dev override from env
+    // Dev override already applied by initialPosition — nothing more to do
     const devLat = process.env.NEXT_PUBLIC_DEV_LAT;
     const devLon = process.env.NEXT_PUBLIC_DEV_LON;
-    if (devLat && devLon) {
-      setPosition({ latitude: parseFloat(devLat), longitude: parseFloat(devLon) });
-      return;
-    }
+    if (devLat && devLon) return;
 
     if (!navigator.geolocation) return;
 

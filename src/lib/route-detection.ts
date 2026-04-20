@@ -1,4 +1,4 @@
-import type { Connection, Leg, IntermediateStop } from "./types";
+import type { Connection, Leg } from "./types";
 import { distanceMeters } from "@/hooks/use-geolocation";
 
 export interface StopOnRoute {
