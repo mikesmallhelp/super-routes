@@ -106,13 +106,13 @@ query PlanConnection(
             name
             lat
             lon
-            stop { code name }
+            stop { code name gtfsId }
           }
           to {
             name
             lat
             lon
-            stop { code name }
+            stop { code name gtfsId }
           }
           start { scheduledTime estimated { time delay } }
           end { scheduledTime estimated { time delay } }
@@ -128,6 +128,89 @@ query PlanConnection(
   }
 }
 `;
+
+const PREV_DEPARTURE_QUERY = `
+query PrevDeparture($stopId: String!, $date: String!) {
+  stop(id: $stopId) {
+    name
+    code
+    stoptimesForServiceDate(date: $date, omitNonPickups: true) {
+      pattern {
+        route { shortName }
+        headsign
+      }
+      stoptimes {
+        scheduledDeparture
+        realtimeDeparture
+        serviceDay
+        realtime
+      }
+    }
+  }
+}
+`;
+
+/**
+ * Fetch the scheduled departure time of the PREVIOUS vehicle of a given route
+ * from a specific stop, relative to a target time.
+ *
+ * Returns null if no previous departure found in the service day's schedule.
+ */
+export async function fetchPreviousDeparture(
+  stopGtfsId: string,
+  routeShortName: string,
+  beforeTime: string
+): Promise<{ scheduledTime: string; realtimeTime?: string } | null> {
+  const before = new Date(beforeTime);
+  // Use Helsinki-local date for the service date lookup
+  const hdate = new Date(before.toLocaleString("en-US", { timeZone: "Europe/Helsinki" }));
+  const date = `${hdate.getFullYear()}${String(hdate.getMonth() + 1).padStart(2, "0")}${String(hdate.getDate()).padStart(2, "0")}`;
+
+  const res = await fetch(ROUTING_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "digitransit-subscription-key": API_KEY,
+    },
+    body: JSON.stringify({
+      query: PREV_DEPARTURE_QUERY,
+      variables: { stopId: stopGtfsId, date },
+    }),
+  });
+  const data = await res.json();
+  log("PrevDeparture response", data);
+  if (data.errors) {
+    console.error("[Digitransit] PrevDeparture errors:", data.errors);
+    return null;
+  }
+
+  const stop = data.data?.stop;
+  if (!stop) return null;
+
+  const beforeMs = before.getTime();
+  type ST = { scheduledDeparture: number; realtimeDeparture?: number; serviceDay: number; realtime: boolean };
+  let best: { schedMs: number; realtMs: number | null } | null = null;
+
+  for (const p of stop.stoptimesForServiceDate || []) {
+    if (p.pattern?.route?.shortName !== routeShortName) continue;
+    for (const st of p.stoptimes as ST[]) {
+      const schedMs = (st.serviceDay + st.scheduledDeparture) * 1000;
+      if (schedMs >= beforeMs) continue;
+      if (!best || schedMs > best.schedMs) {
+        const realtMs = st.realtime && st.realtimeDeparture != null
+          ? (st.serviceDay + st.realtimeDeparture) * 1000
+          : null;
+        best = { schedMs, realtMs };
+      }
+    }
+  }
+
+  if (!best) return null;
+  return {
+    scheduledTime: new Date(best.schedMs).toISOString(),
+    realtimeTime: best.realtMs != null ? new Date(best.realtMs).toISOString() : undefined,
+  };
+}
 
 export async function fetchRoutes(
   origin: Coordinates,

@@ -194,10 +194,16 @@ export interface UpcomingArrival {
   mode: string;
   stopName: string;
   stopCode: string;
+  /** GTFS id of the departure stop, used to look up schedule info */
+  stopGtfsId?: string;
   minutesUntil: number;
   scheduledTime: string;
   realtimeTime?: string;
   delaySeconds?: number;
+  /** Scheduled departure of the previous bus of the same route from this stop */
+  previousScheduledTime?: string;
+  /** Realtime departure of the previous bus, if realtime data available */
+  previousRealtimeTime?: string;
 }
 
 export interface JourneyState {
@@ -281,6 +287,7 @@ export function detectJourneyState(
             mode: leg.mode,
             stopName: leg.from.stop.name,
             stopCode: leg.from.stop.code,
+            stopGtfsId: leg.from.stop.gtfsId,
             minutesUntil,
             scheduledTime: leg.start.scheduledTime,
             realtimeTime: leg.start.estimated?.time,
@@ -338,6 +345,7 @@ export function findUpcomingArrivals(
         mode: leg.mode,
         stopName: leg.from.stop.name,
         stopCode: leg.from.stop.code,
+        stopGtfsId: leg.from.stop.gtfsId,
         minutesUntil,
         scheduledTime: leg.start.scheduledTime,
         realtimeTime: leg.start.estimated?.time,

@@ -22,6 +22,7 @@ export interface LegStop {
   stop?: {
     code: string;
     name: string;
+    gtfsId?: string;
   } | null;
 }
 

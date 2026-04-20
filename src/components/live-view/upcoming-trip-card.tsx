@@ -4,6 +4,7 @@ import type { Leg } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildStopList } from "@/lib/route-detection";
+import { usePreviousDeparture } from "@/hooks/use-previous-departure";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fi-FI", {
@@ -32,10 +33,20 @@ export function UpcomingTripCard({ leg }: UpcomingTripCardProps) {
   const headsign = leg.trip?.tripHeadsign;
   const stops = buildStopList(leg);
 
+  const prevDep = usePreviousDeparture(
+    leg.from.stop?.gtfsId,
+    leg.trip?.routeShortName,
+    leg.start.scheduledTime
+  );
+  const prevTime = prevDep.realtimeTime ?? prevDep.scheduledTime;
+  const prevMinutesAgo = prevTime
+    ? Math.round((Date.now() - new Date(prevTime).getTime()) / 60_000)
+    : null;
+
   return (
     <Card className="w-full border-blue-400 border-2">
       <CardContent className="p-4">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-2">
           <span>{modeIcon(leg.mode)}</span>
           {shortName && (
             <Badge variant="secondary" className="text-sm font-bold">
@@ -49,6 +60,20 @@ export function UpcomingTripCard({ leg }: UpcomingTripCardProps) {
             {formatTime(leg.start.scheduledTime)}–{formatTime(leg.end.scheduledTime)}
           </span>
         </div>
+
+        {prevTime && (
+          <div className="text-xs text-muted-foreground italic mb-3">
+            Edellinen lähtö: {formatTime(prevTime)}
+            {prevDep.realtimeTime &&
+              prevDep.scheduledTime &&
+              prevDep.realtimeTime !== prevDep.scheduledTime && (
+                <> (aikat. {formatTime(prevDep.scheduledTime)})</>
+              )}
+            {prevMinutesAgo !== null && prevMinutesAgo >= 0 && (
+              <> — {prevMinutesAgo} min sitten</>
+            )}
+          </div>
+        )}
 
         <div className="relative ml-3">
           <div className="absolute left-[5px] top-2 bottom-2 w-0.5 bg-muted-foreground/30" />

@@ -32,6 +32,36 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
   const activeConnection =
     journeyState ? pastConnections[journeyState.connectionIndex] : null;
 
+  // Compute which leg should be rendered as the "upcoming trip card":
+  //   - waiting: the leg the user is waiting for (== activeIdx)
+  //   - on-vehicle: the next transit leg after the current active one
+  const layout = useMemo(() => {
+    if (!journeyState || !activeConnection) return null;
+    const legs = activeConnection.legs;
+    const activeIdx = journeyState.legIndex;
+
+    let upcomingIdx: number | null = null;
+    if (journeyState.mode === "waiting") {
+      upcomingIdx = activeIdx;
+    } else {
+      for (let i = activeIdx + 1; i < legs.length; i++) {
+        if (legs[i].mode !== "WALK" && legs[i].trip) {
+          upcomingIdx = i;
+          break;
+        }
+      }
+    }
+
+    const pastLegs = legs.slice(0, activeIdx);
+    const futureBefore =
+      upcomingIdx !== null ? legs.slice(activeIdx + 1, upcomingIdx) : legs.slice(activeIdx + 1);
+    const upcomingLeg = upcomingIdx !== null && upcomingIdx !== activeIdx ? legs[upcomingIdx] : null;
+    const waitingLeg = journeyState.mode === "waiting" ? legs[activeIdx] : null;
+    const futureAfter = upcomingIdx !== null ? legs.slice(upcomingIdx + 1) : [];
+
+    return { pastLegs, futureBefore, upcomingLeg, waitingLeg, futureAfter };
+  }, [journeyState, activeConnection]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -84,9 +114,9 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
         <p className="text-destructive text-sm">Virhe ladattaessa reittejä.</p>
       )}
 
-      {journeyState && activeConnection ? (
+      {journeyState && activeConnection && layout ? (
         <div className="space-y-2">
-          {activeConnection.legs.slice(0, journeyState.legIndex).map((leg, i) => (
+          {layout.pastLegs.map((leg, i) => (
             <LegCard key={`past-${i}`} leg={leg} variant="past" />
           ))}
 
@@ -94,14 +124,23 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
             <StopList activeLeg={journeyState.activeLeg} />
           )}
           {journeyState.mode === "waiting" && journeyState.upcomingArrival && (
-            <>
-              <UpcomingArrivals arrivals={[journeyState.upcomingArrival]} />
-              <UpcomingTripCard leg={activeConnection.legs[journeyState.legIndex]} />
-            </>
+            <UpcomingArrivals arrivals={[journeyState.upcomingArrival]} />
           )}
 
-          {activeConnection.legs.slice(journeyState.legIndex + 1).map((leg, i) => (
-            <LegCard key={`future-${i}`} leg={leg} variant="future" />
+          {/* Walk or other legs between the active leg and the next transit */}
+          {layout.futureBefore.map((leg, i) => (
+            <LegCard key={`fb-${i}`} leg={leg} variant="future" />
+          ))}
+
+          {/* The trip user is waiting for (waiting mode) */}
+          {layout.waitingLeg && <UpcomingTripCard leg={layout.waitingLeg} />}
+
+          {/* The next upcoming trip after the current bus (on-vehicle mode) */}
+          {layout.upcomingLeg && <UpcomingTripCard leg={layout.upcomingLeg} />}
+
+          {/* Legs after the upcoming trip */}
+          {layout.futureAfter.map((leg, i) => (
+            <LegCard key={`fa-${i}`} leg={leg} variant="future" />
           ))}
         </div>
       ) : (
