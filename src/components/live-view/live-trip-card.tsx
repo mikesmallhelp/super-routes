@@ -6,6 +6,7 @@ import { useLiveRoutes } from "@/hooks/use-live-routes";
 import { ConnectionCard } from "@/components/trip-wizard/connection-card";
 import { StopList } from "./stop-list";
 import { UpcomingArrivals } from "./upcoming-arrivals";
+import { UpcomingTripCard } from "./upcoming-trip-card";
 import { LegCard } from "./leg-card";
 import { Badge } from "@/components/ui/badge";
 import { detectJourneyState } from "@/lib/route-detection";
@@ -93,7 +94,10 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
             <StopList activeLeg={journeyState.activeLeg} />
           )}
           {journeyState.mode === "waiting" && journeyState.upcomingArrival && (
-            <UpcomingArrivals arrivals={[journeyState.upcomingArrival]} />
+            <>
+              <UpcomingArrivals arrivals={[journeyState.upcomingArrival]} />
+              <UpcomingTripCard leg={activeConnection.legs[journeyState.legIndex]} />
+            </>
           )}
 
           {activeConnection.legs.slice(journeyState.legIndex + 1).map((leg, i) => (
