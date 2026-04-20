@@ -43,20 +43,34 @@ export function UpcomingArrivals({ arrivals }: UpcomingArrivalsProps) {
               {stopArrivals[0].stopName} ({stopArrivals[0].stopCode})
             </div>
             <div className="space-y-1">
-              {stopArrivals.map((a, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm">
-                  <span>{modeIcon(a.mode)}</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {a.routeShortName}
-                  </Badge>
-                  <span className="text-muted-foreground text-xs truncate flex-1">
-                    → {a.headsign}
-                  </span>
-                  <span className="font-bold tabular-nums shrink-0">
-                    {a.minutesUntil} min
-                  </span>
-                </div>
-              ))}
+              {stopArrivals.map((a, i) => {
+                const delayMin =
+                  a.delaySeconds !== undefined ? Math.round(a.delaySeconds / 60) : null;
+                return (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <span>{modeIcon(a.mode)}</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {a.routeShortName}
+                    </Badge>
+                    <span className="text-muted-foreground text-xs truncate flex-1">
+                      → {a.headsign}
+                    </span>
+                    {delayMin !== null && delayMin >= 1 && (
+                      <span className="text-xs text-red-600 font-medium shrink-0">
+                        +{delayMin} min
+                      </span>
+                    )}
+                    {delayMin !== null && delayMin <= -1 && (
+                      <span className="text-xs text-amber-600 font-medium shrink-0">
+                        {delayMin} min
+                      </span>
+                    )}
+                    <span className="font-bold tabular-nums shrink-0">
+                      {a.minutesUntil} min
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}

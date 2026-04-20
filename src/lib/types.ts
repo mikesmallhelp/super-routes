@@ -25,6 +25,11 @@ export interface LegStop {
   } | null;
 }
 
+export interface Estimated {
+  time: string;
+  delay?: string;
+}
+
 export interface Leg {
   mode: string;
   duration: number;
@@ -32,8 +37,8 @@ export interface Leg {
   realtimeState: string;
   from: LegStop;
   to: LegStop;
-  start: { scheduledTime: string };
-  end: { scheduledTime: string };
+  start: { scheduledTime: string; estimated?: Estimated | null };
+  end: { scheduledTime: string; estimated?: Estimated | null };
   intermediateStops?: IntermediateStop[] | null;
   trip: {
     tripHeadsign: string;

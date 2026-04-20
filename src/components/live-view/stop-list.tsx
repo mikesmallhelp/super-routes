@@ -5,6 +5,13 @@ import type { StopOnRoute } from "@/lib/route-detection";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("fi-FI", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function modeIcon(mode: string) {
   switch (mode) {
     case "BUS": return "🚌";
@@ -73,6 +80,11 @@ export function StopList({ activeLeg }: StopListProps) {
   const shortName = leg.trip?.routeShortName;
   const headsign = leg.trip?.tripHeadsign;
   const entries = buildVisibleEntries(stops);
+  const currentStop = stops.find((s) => s.status === "current");
+  const delayMin =
+    currentStop?.delaySeconds !== undefined
+      ? Math.round(currentStop.delaySeconds / 60)
+      : null;
 
   return (
     <Card className="w-full border-green-400 border-2">
@@ -87,7 +99,15 @@ export function StopList({ activeLeg }: StopListProps) {
           {headsign && (
             <span className="text-sm text-muted-foreground">→ {headsign}</span>
           )}
-          <span className="ml-auto text-xs text-green-700 font-medium">Matkalla</span>
+          <span className="ml-auto text-xs text-green-700 font-medium">
+            Matkalla
+            {delayMin !== null && delayMin >= 1 && (
+              <span className="ml-2 text-red-600">+{delayMin} min myöhässä</span>
+            )}
+            {delayMin !== null && delayMin <= -1 && (
+              <span className="ml-2 text-amber-600">{delayMin} min edellä</span>
+            )}
+          </span>
         </div>
 
         <div className="relative ml-3">
@@ -143,9 +163,19 @@ export function StopList({ activeLeg }: StopListProps) {
                     </span>
                   </div>
 
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {stop.code}
-                  </span>
+                  <div className="text-xs shrink-0 tabular-nums text-right">
+                    <div className={stop.delaySeconds !== undefined && stop.delaySeconds > 0 ? "text-red-600 font-medium" : stop.delaySeconds !== undefined && stop.delaySeconds < 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>
+                      {stop.realtimeTime
+                        ? formatTime(stop.realtimeTime)
+                        : stop.scheduledTime && formatTime(stop.scheduledTime)}
+                    </div>
+                    {stop.delaySeconds !== undefined && Math.abs(stop.delaySeconds) >= 60 && (
+                      <div className={stop.delaySeconds > 0 ? "text-red-600" : "text-amber-600"}>
+                        {stop.delaySeconds > 0 ? "+" : ""}
+                        {Math.round(stop.delaySeconds / 60)} min
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}

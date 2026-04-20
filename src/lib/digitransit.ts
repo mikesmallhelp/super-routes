@@ -114,8 +114,8 @@ query PlanConnection(
             lon
             stop { code name }
           }
-          start { scheduledTime }
-          end { scheduledTime }
+          start { scheduledTime estimated { time delay } }
+          end { scheduledTime estimated { time delay } }
           intermediateStops { name code lat lon }
           trip {
             tripHeadsign

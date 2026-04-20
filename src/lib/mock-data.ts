@@ -164,6 +164,21 @@ export function generateMockConnections(): Connection[] {
 
   const t = (min: number) => timeOffset(min, progressMin);
 
+  /**
+   * Build an "estimated" field simulating real-time data with a given delay.
+   * delayMin: positive = late, negative = early.
+   */
+  const est = (baseMin: number, delayMin: number) => ({
+    time: timeOffset(baseMin + delayMin, progressMin),
+    delay: `PT${Math.round(delayMin * 60)}S`,
+  });
+
+  // Mock delays to exercise the UI:
+  //   247 on time, 530 two minutes late, 560 three minutes late
+  const DELAY_247 = 0;
+  const DELAY_530 = 2;
+  const DELAY_560 = 3;
+
   const connection: Connection = {
     start: t(-50),
     end: t(29),
@@ -209,8 +224,8 @@ export function generateMockConnections(): Connection[] {
           lon: 24.661122,
           stop: { code: "E6309", name: "Ikea Espoo" },
         },
-        start: { scheduledTime: t(-25) },
-        end: { scheduledTime: t(-11) },
+        start: { scheduledTime: t(-25), estimated: est(-25, DELAY_247) },
+        end: { scheduledTime: t(-11), estimated: est(-11, DELAY_247) },
         intermediateStops: [
           { name: "Kolmperä", code: "E6407", lat: 60.24904, lon: 24.53423 },
           { name: "Ämmässuo", code: "E6965", lat: 60.247725, lon: 24.542425 },
@@ -273,8 +288,8 @@ export function generateMockConnections(): Connection[] {
           lon: 24.852743,
           stop: { code: "V1597", name: "Iskostie" },
         },
-        start: { scheduledTime: t(-5) },
-        end: { scheduledTime: t(6) },
+        start: { scheduledTime: t(-5), estimated: est(-5, DELAY_530) },
+        end: { scheduledTime: t(6), estimated: est(6, DELAY_530) },
         intermediateStops: [
           { name: "Fallåker", code: "E6311", lat: 60.22162, lon: 24.671849 },
           { name: "Jorvi", code: "E6302", lat: 60.223356, lon: 24.689578 },
@@ -319,8 +334,8 @@ export function generateMockConnections(): Connection[] {
           lon: 24.883116,
           stop: { code: "V1632", name: "Silvola" },
         },
-        start: { scheduledTime: t(12) },
-        end: { scheduledTime: t(20) },
+        start: { scheduledTime: t(12), estimated: est(12, DELAY_560) },
+        end: { scheduledTime: t(20), estimated: est(20, DELAY_560) },
         intermediateStops: [
           { name: "Myyrmäen asema", code: "V1565", lat: 60.260899, lon: 24.8567 },
           { name: "Ojahaantie", code: "V1520", lat: 60.263692, lon: 24.859619 },

@@ -7,7 +7,19 @@ export interface StopOnRoute {
   lat: number;
   lon: number;
   scheduledTime?: string;
+  realtimeTime?: string;
+  delaySeconds?: number;
   status: "passed" | "current" | "upcoming";
+}
+
+function computeDelaySeconds(
+  scheduled: string,
+  estimated?: { time: string } | null
+): number | null {
+  if (!estimated) return null;
+  const sched = new Date(scheduled).getTime();
+  const est = new Date(estimated.time).getTime();
+  return Math.round((est - sched) / 1000);
 }
 
 export interface ActiveLeg {
@@ -18,12 +30,22 @@ export interface ActiveLeg {
 
 const MAX_DISTANCE_M = 500;
 
-/** Build an ordered stop list for a transit leg (from + intermediates + to) */
-function buildStopList(leg: Leg): { name: string; code: string; lat: number; lon: number }[] {
-  const stops: { name: string; code: string; lat: number; lon: number }[] = [];
+interface StopWithTimes {
+  name: string;
+  code: string;
+  lat: number;
+  lon: number;
+  scheduledTime: string;
+  realtimeTime?: string;
+  delaySeconds?: number;
+}
+
+/** Build an ordered stop list for a transit leg with interpolated arrival and realtime times */
+function buildStopList(leg: Leg): StopWithTimes[] {
+  const raw: { name: string; code: string; lat: number; lon: number }[] = [];
 
   if (leg.from.stop) {
-    stops.push({
+    raw.push({
       name: leg.from.stop.name,
       code: leg.from.stop.code,
       lat: leg.from.lat,
@@ -32,13 +54,11 @@ function buildStopList(leg: Leg): { name: string; code: string; lat: number; lon
   }
 
   if (leg.intermediateStops) {
-    for (const s of leg.intermediateStops) {
-      stops.push(s);
-    }
+    for (const s of leg.intermediateStops) raw.push(s);
   }
 
   if (leg.to.stop) {
-    stops.push({
+    raw.push({
       name: leg.to.stop.name,
       code: leg.to.stop.code,
       lat: leg.to.lat,
@@ -46,7 +66,46 @@ function buildStopList(leg: Leg): { name: string; code: string; lat: number; lon
     });
   }
 
-  return stops;
+  const n = raw.length;
+  if (n === 0) return [];
+
+  const startMs = new Date(leg.start.scheduledTime).getTime();
+  const endMs = new Date(leg.end.scheduledTime).getTime();
+
+  // Interpolate times by distance along the stop chain for more accuracy.
+  // Stops are rarely evenly spaced in time, so we weight by segment length.
+  const segmentLengths: number[] = [];
+  let totalLength = 0;
+  for (let i = 0; i < n - 1; i++) {
+    const d = distanceMeters(raw[i].lat, raw[i].lon, raw[i + 1].lat, raw[i + 1].lon);
+    segmentLengths.push(d);
+    totalLength += d;
+  }
+
+  const cumulative: number[] = [0];
+  for (let i = 0; i < segmentLengths.length; i++) {
+    cumulative.push(cumulative[i] + segmentLengths[i]);
+  }
+
+  const startDelay = computeDelaySeconds(leg.start.scheduledTime, leg.start.estimated);
+  const endDelay = computeDelaySeconds(leg.end.scheduledTime, leg.end.estimated);
+
+  return raw.map((s, i) => {
+    const fraction = totalLength > 0 ? cumulative[i] / totalLength : (n > 1 ? i / (n - 1) : 0);
+    const schedMs = startMs + fraction * (endMs - startMs);
+    const scheduledTime = new Date(schedMs).toISOString();
+
+    let delaySeconds: number | undefined;
+    let realtimeTime: string | undefined;
+    if (startDelay !== null || endDelay !== null) {
+      const sd = startDelay ?? endDelay ?? 0;
+      const ed = endDelay ?? startDelay ?? 0;
+      delaySeconds = Math.round(sd + fraction * (ed - sd));
+      realtimeTime = new Date(schedMs + delaySeconds * 1000).toISOString();
+    }
+
+    return { ...s, scheduledTime, realtimeTime, delaySeconds };
+  });
 }
 
 /** Find the closest stop to the user among a stop list, return index and distance */
@@ -137,6 +196,8 @@ export interface UpcomingArrival {
   stopCode: string;
   minutesUntil: number;
   scheduledTime: string;
+  realtimeTime?: string;
+  delaySeconds?: number;
 }
 
 export interface JourneyState {
@@ -203,7 +264,13 @@ export function detectJourneyState(
       if (dist > MAX_DISTANCE_M) continue;
 
       if (!best || dist < best.distance) {
-        const minutesUntil = Math.round((legStart.getTime() - now.getTime()) / 60000);
+        const delaySec = computeDelaySeconds(leg.start.scheduledTime, leg.start.estimated);
+        const effectiveStart = leg.start.estimated?.time
+          ? new Date(leg.start.estimated.time)
+          : legStart;
+        const minutesUntil = Math.round(
+          (effectiveStart.getTime() - now.getTime()) / 60000
+        );
         best = {
           connectionIndex: ci,
           legIndex: li,
@@ -216,6 +283,8 @@ export function detectJourneyState(
             stopCode: leg.from.stop.code,
             minutesUntil,
             scheduledTime: leg.start.scheduledTime,
+            realtimeTime: leg.start.estimated?.time,
+            delaySeconds: delaySec ?? undefined,
           },
         };
       }
@@ -255,7 +324,13 @@ export function findUpcomingArrivals(
       const dist = distanceMeters(userLat, userLon, leg.from.lat, leg.from.lon);
       if (dist > MAX_DISTANCE_M) continue;
 
-      const minutesUntil = Math.round((legStart.getTime() - now.getTime()) / 60000);
+      const delaySec = computeDelaySeconds(leg.start.scheduledTime, leg.start.estimated);
+      const effectiveStart = leg.start.estimated?.time
+        ? new Date(leg.start.estimated.time)
+        : legStart;
+      const minutesUntil = Math.round(
+        (effectiveStart.getTime() - now.getTime()) / 60000
+      );
 
       arrivals.push({
         routeShortName: leg.trip.routeShortName,
@@ -265,6 +340,8 @@ export function findUpcomingArrivals(
         stopCode: leg.from.stop.code,
         minutesUntil,
         scheduledTime: leg.start.scheduledTime,
+        realtimeTime: leg.start.estimated?.time,
+        delaySeconds: delaySec ?? undefined,
       });
     }
   }
