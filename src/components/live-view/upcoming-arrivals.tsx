@@ -34,7 +34,7 @@ export function UpcomingArrivals({ arrivals }: UpcomingArrivalsProps) {
     <Card className="w-full border-green-400 border-2">
       <CardContent className="p-4">
         <div className="text-sm font-semibold text-green-700 mb-3">
-          Saapuvat pysäkille
+          Saapuu pysäkille
         </div>
 
         {Array.from(byStop.entries()).map(([key, stopArrivals]) => (
