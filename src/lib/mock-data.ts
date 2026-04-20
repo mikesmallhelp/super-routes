@@ -159,7 +159,7 @@ function timeOffset(baseMinutes: number, progressMin: number): string {
  * Times shift based on progressMin so the user appears at the right point in the journey.
  */
 export function generateMockConnections(): Connection[] {
-  const { progressMin, label } = getCurrentScenario();
+  const { progressMin } = getCurrentScenario();
   console.log(`[Mock] Skenaario: ${getMockScenarioLabel()}, progress: ${progressMin} min`);
 
   const t = (min: number) => timeOffset(min, progressMin);
