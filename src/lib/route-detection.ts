@@ -30,7 +30,7 @@ export interface ActiveLeg {
 
 const MAX_DISTANCE_M = 500;
 
-interface StopWithTimes {
+export interface StopWithTimes {
   name: string;
   code: string;
   lat: number;
@@ -41,7 +41,7 @@ interface StopWithTimes {
 }
 
 /** Build an ordered stop list for a transit leg with interpolated arrival and realtime times */
-function buildStopList(leg: Leg): StopWithTimes[] {
+export function buildStopList(leg: Leg): StopWithTimes[] {
   const raw: { name: string; code: string; lat: number; lon: number }[] = [];
 
   if (leg.from.stop) {
