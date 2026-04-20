@@ -71,8 +71,13 @@ export function LiveDashboard() {
         </div>
         <div className="flex gap-2">
           {USE_MOCK && (
-            <Button variant="outline" size="sm" onClick={togglePause}>
-              {isPaused ? "Jatka" : "Pysäytä"}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={togglePause}
+              className="border-2 border-amber-500 bg-amber-100 text-amber-900 hover:bg-amber-200 hover:text-amber-900 dark:bg-amber-950 dark:text-amber-200 dark:hover:bg-amber-900"
+            >
+              {isPaused ? "▶ Jatka" : "⏸ Pysäytä"}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={goBackToSetup}>
