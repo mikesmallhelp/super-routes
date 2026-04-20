@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getMockUserPosition, getMockScenarioLabel, SCENARIO_INTERVAL_MS } from "@/lib/mock-data";
+
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
 
 interface GeoPosition {
   latitude: number;
@@ -11,6 +14,27 @@ export function useGeolocation() {
   const [position, setPosition] = useState<GeoPosition | null>(null);
 
   useEffect(() => {
+    if (USE_MOCK) {
+      const update = () => {
+        const pos = getMockUserPosition();
+        console.log(`[Geolocation] Mock: ${getMockScenarioLabel()}`, pos);
+        setPosition(pos);
+      };
+      update();
+      // Poll faster than scenario interval to stay in sync (min 500ms, max 5s)
+      const pollInterval = Math.max(500, Math.min(5_000, Math.floor(SCENARIO_INTERVAL_MS / 6)));
+      const interval = setInterval(update, pollInterval);
+      return () => clearInterval(interval);
+    }
+
+    // Dev override from env
+    const devLat = process.env.NEXT_PUBLIC_DEV_LAT;
+    const devLon = process.env.NEXT_PUBLIC_DEV_LON;
+    if (devLat && devLon) {
+      setPosition({ latitude: parseFloat(devLat), longitude: parseFloat(devLon) });
+      return;
+    }
+
     if (!navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(

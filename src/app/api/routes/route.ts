@@ -3,7 +3,7 @@ import { fetchRoutes } from "@/lib/digitransit";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { origin, destination, numItineraries } = body;
+  const { origin, destination, numItineraries, dateTime } = body;
 
   if (!origin || !destination) {
     return NextResponse.json(
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const connections = await fetchRoutes(origin, destination, numItineraries || 5);
+    const connections = await fetchRoutes(origin, destination, numItineraries || 5, dateTime);
     return NextResponse.json({ connections });
   } catch (error) {
     console.error("Route fetch error:", error);

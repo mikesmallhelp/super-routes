@@ -8,6 +8,13 @@ export interface GeocodedAddress {
   coordinates: Coordinates;
 }
 
+export interface IntermediateStop {
+  name: string;
+  code: string;
+  lat: number;
+  lon: number;
+}
+
 export interface LegStop {
   name: string;
   lat: number;
@@ -15,7 +22,13 @@ export interface LegStop {
   stop?: {
     code: string;
     name: string;
+    gtfsId?: string;
   } | null;
+}
+
+export interface Estimated {
+  time: string;
+  delay?: string;
 }
 
 export interface Leg {
@@ -25,11 +38,13 @@ export interface Leg {
   realtimeState: string;
   from: LegStop;
   to: LegStop;
-  start: { scheduledTime: string };
-  end: { scheduledTime: string };
+  start: { scheduledTime: string; estimated?: Estimated | null };
+  end: { scheduledTime: string; estimated?: Estimated | null };
+  intermediateStops?: IntermediateStop[] | null;
   trip: {
     tripHeadsign: string;
     routeShortName: string;
+    gtfsId?: string;
   } | null;
 }
 

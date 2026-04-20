@@ -1,9 +1,16 @@
 "use client";
 
+import { useMemo } from "react";
 import type { SavedTrip } from "@/lib/types";
 import { useLiveRoutes } from "@/hooks/use-live-routes";
 import { ConnectionCard } from "@/components/trip-wizard/connection-card";
+import { StopList } from "./stop-list";
+import { UpcomingArrivals } from "./upcoming-arrivals";
+import { UpcomingTripCard } from "./upcoming-trip-card";
+import { LegCard } from "./leg-card";
 import { Badge } from "@/components/ui/badge";
+import { detectJourneyState } from "@/lib/route-detection";
+import { useGeolocation } from "@/hooks/use-geolocation";
 
 interface LiveTripCardProps {
   trip: SavedTrip;
@@ -11,10 +18,49 @@ interface LiveTripCardProps {
 }
 
 export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
-  const { connections, isLoading, isValidating, error } = useLiveRoutes(trip);
+  const { connections, pastConnections, isLoading, isValidating, error } = useLiveRoutes(trip);
   const hasIncluded = trip.selectedVehicles.length > 0;
   const hasExcluded = (trip.excludedVehicles ?? []).length > 0;
   const mode = trip.vehicleFilterMode ?? "and";
+  const userPos = useGeolocation();
+
+  const journeyState = useMemo(() => {
+    if (!userPos || pastConnections.length === 0) return null;
+    return detectJourneyState(pastConnections, userPos.latitude, userPos.longitude);
+  }, [pastConnections, userPos]);
+
+  const activeConnection =
+    journeyState ? pastConnections[journeyState.connectionIndex] : null;
+
+  // Compute which leg should be rendered as the "upcoming trip card":
+  //   - waiting: the leg the user is waiting for (== activeIdx)
+  //   - on-vehicle: the next transit leg after the current active one
+  const layout = useMemo(() => {
+    if (!journeyState || !activeConnection) return null;
+    const legs = activeConnection.legs;
+    const activeIdx = journeyState.legIndex;
+
+    let upcomingIdx: number | null = null;
+    if (journeyState.mode === "waiting") {
+      upcomingIdx = activeIdx;
+    } else {
+      for (let i = activeIdx + 1; i < legs.length; i++) {
+        if (legs[i].mode !== "WALK" && legs[i].trip) {
+          upcomingIdx = i;
+          break;
+        }
+      }
+    }
+
+    const pastLegs = legs.slice(0, activeIdx);
+    const futureBefore =
+      upcomingIdx !== null ? legs.slice(activeIdx + 1, upcomingIdx) : legs.slice(activeIdx + 1);
+    const upcomingLeg = upcomingIdx !== null && upcomingIdx !== activeIdx ? legs[upcomingIdx] : null;
+    const waitingLeg = journeyState.mode === "waiting" ? legs[activeIdx] : null;
+    const futureAfter = upcomingIdx !== null ? legs.slice(upcomingIdx + 1) : [];
+
+    return { pastLegs, futureBefore, upcomingLeg, waitingLeg, futureAfter };
+  }, [journeyState, activeConnection]);
 
   return (
     <div className="space-y-3">
@@ -68,21 +114,54 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
         <p className="text-destructive text-sm">Virhe ladattaessa reittejä.</p>
       )}
 
-      {!isLoading && connections.length === 0 && !error && (
-        <p className="text-sm text-muted-foreground">
-          Ei reittivaihtoehtoja juuri nyt.
-        </p>
-      )}
+      {journeyState && activeConnection && layout ? (
+        <div className="space-y-2">
+          {layout.pastLegs.map((leg, i) => (
+            <LegCard key={`past-${i}`} leg={leg} variant="past" />
+          ))}
 
-      {connections.map((conn, i) => (
-        <ConnectionCard
-          key={`${conn.start}-${i}`}
-          connection={conn}
-          index={i + 1}
-          originLabel={trip.originLabel}
-          destinationLabel={trip.destinationLabel}
-        />
-      ))}
+          {journeyState.mode === "on-vehicle" && journeyState.activeLeg && (
+            <StopList activeLeg={journeyState.activeLeg} />
+          )}
+          {journeyState.mode === "waiting" && journeyState.upcomingArrival && (
+            <UpcomingArrivals arrivals={[journeyState.upcomingArrival]} />
+          )}
+
+          {/* Walk or other legs between the active leg and the next transit */}
+          {layout.futureBefore.map((leg, i) => (
+            <LegCard key={`fb-${i}`} leg={leg} variant="future" />
+          ))}
+
+          {/* The trip user is waiting for (waiting mode) */}
+          {layout.waitingLeg && <UpcomingTripCard leg={layout.waitingLeg} />}
+
+          {/* The next upcoming trip after the current bus (on-vehicle mode) */}
+          {layout.upcomingLeg && <UpcomingTripCard leg={layout.upcomingLeg} />}
+
+          {/* Legs after the upcoming trip */}
+          {layout.futureAfter.map((leg, i) => (
+            <LegCard key={`fa-${i}`} leg={leg} variant="future" />
+          ))}
+        </div>
+      ) : (
+        <>
+          {!isLoading && connections.length === 0 && !error && (
+            <p className="text-sm text-muted-foreground">
+              Ei reittivaihtoehtoja juuri nyt.
+            </p>
+          )}
+
+          {connections.map((conn, i) => (
+            <ConnectionCard
+              key={`${conn.start}-${i}`}
+              connection={conn}
+              index={i + 1}
+              originLabel={trip.originLabel}
+              destinationLabel={trip.destinationLabel}
+            />
+          ))}
+        </>
+      )}
     </div>
   );
 }
