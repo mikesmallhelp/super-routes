@@ -160,7 +160,7 @@ function timeOffset(baseMinutes: number, progressMin: number): string {
  */
 export function generateMockConnections(): Connection[] {
   const { progressMin } = getCurrentScenario();
-  console.log(`[Mock] Skenaario: ${getMockScenarioLabel()}, progress: ${progressMin} min`);
+  console.log(`[Mock] Scenario: ${getMockScenarioLabel()}, progress: ${progressMin} min`);
 
   const t = (min: number) => timeOffset(min, progressMin);
 

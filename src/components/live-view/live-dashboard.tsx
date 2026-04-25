@@ -60,10 +60,10 @@ export function LiveDashboard() {
 
   const sortedTrips = useMemo(() => {
     if (!userPos) {
-      console.log("[LiveDashboard] Ei sijaintia saatavilla, ei järjestetä");
+      console.log("[LiveDashboard] No location available, skipping sorting");
       return trips;
     }
-    console.log("[LiveDashboard] Käyttäjän sijainti:", {
+    console.log("[LiveDashboard] User location:", {
       lat: userPos.latitude,
       lon: userPos.longitude,
     });

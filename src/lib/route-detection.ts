@@ -243,7 +243,7 @@ export function detectJourneyState(
   userLon: number
 ): JourneyState | null {
   console.log(
-    `[Detection] Yritetään tunnistaa: ${connections.length} yhteyttä, käyttäjä @${userLat.toFixed(5)},${userLon.toFixed(5)}`
+    `[Detection] Detecting journey state: ${connections.length} connections, user @${userLat.toFixed(5)},${userLon.toFixed(5)}`
   );
 
   const active = detectActiveLeg(connections, userLat, userLon);
@@ -252,7 +252,7 @@ export function detectJourneyState(
     const currentStop = active.stops.find((s) => s.status === "current");
     console.log(
       `[Detection] On-vehicle: ${active.leg.trip?.routeShortName} → ${active.leg.trip?.tripHeadsign}, ` +
-        `pysäkki ${currentStop?.name}`
+        `stop ${currentStop?.name}`
     );
     return {
       connectionIndex: active.connectionIndex,
@@ -332,7 +332,7 @@ export function detectJourneyState(
   if (best) {
     console.log(
       `[Detection] Waiting: ${best.arrival.routeShortName} → ${best.arrival.headsign} ` +
-        `pysäkillä ${best.arrival.stopName}, ${best.arrival.minutesUntil} min`
+        `at stop ${best.arrival.stopName}, ${best.arrival.minutesUntil} min`
     );
     return {
       connectionIndex: best.connectionIndex,
@@ -348,7 +348,7 @@ export function detectJourneyState(
     const conn = connections[ci];
     const cEnd = new Date(conn.end);
     if (now > cEnd) {
-      reasons.push(`yhteys #${ci}: päättynyt ${cEnd.toLocaleTimeString("fi-FI")}`);
+      reasons.push(`connection #${ci}: ended at ${cEnd.toLocaleTimeString("fi-FI")}`);
       continue;
     }
     for (let li = 0; li < conn.legs.length; li++) {
@@ -366,7 +366,7 @@ export function detectJourneyState(
       );
     }
   }
-  console.log("[Detection] Ei tunnistettu. Lähimmät vaihtoehdot:", reasons.slice(0, 10));
+  console.log("[Detection] No match detected. Closest candidates:", reasons.slice(0, 10));
 
   return null;
 }
