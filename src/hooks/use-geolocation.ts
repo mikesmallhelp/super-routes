@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import { getMockUserPosition, getMockScenarioLabel, SCENARIO_INTERVAL_MS } from "@/lib/mock-data";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
+const GEOLOCATION_POLL_INTERVAL_MS = 10_000;
+const GEOLOCATION_MAXIMUM_AGE_MS = 5_000;
+const GEOLOCATION_TIMEOUT_MS = 10_000;
 
 interface GeoPosition {
   latitude: number;
@@ -20,44 +23,119 @@ function initialPosition(): GeoPosition | null {
   return null;
 }
 
+let snapshot: GeoPosition | null = initialPosition();
+const subscribers = new Set<() => void>();
+let mockIntervalId: ReturnType<typeof setInterval> | null = null;
+let pollIntervalId: ReturnType<typeof setInterval> | null = null;
+let watchId: number | null = null;
+
+const geolocationOptions: PositionOptions = {
+  enableHighAccuracy: true,
+  maximumAge: GEOLOCATION_MAXIMUM_AGE_MS,
+  timeout: GEOLOCATION_TIMEOUT_MS,
+};
+
+function setSnapshot(position: GeoPosition | null) {
+  snapshot = position;
+  for (const callback of subscribers) callback();
+}
+
+function updateFromBrowserPosition(pos: GeolocationPosition) {
+  setSnapshot({
+    latitude: pos.coords.latitude,
+    longitude: pos.coords.longitude,
+  });
+}
+
+function requestBrowserPosition() {
+  navigator.geolocation.getCurrentPosition(
+    updateFromBrowserPosition,
+    () => {
+      // Permission denied or error — keep the previous known position.
+    },
+    geolocationOptions
+  );
+}
+
+function startMockLocation() {
+  const update = () => {
+    const pos = getMockUserPosition();
+    console.log(`[Geolocation] Mock: ${getMockScenarioLabel()}`, pos);
+    setSnapshot(pos);
+  };
+  // Poll faster than scenario interval to stay in sync (min 500ms, max 5s)
+  const pollInterval = Math.max(500, Math.min(5_000, Math.floor(SCENARIO_INTERVAL_MS / 6)));
+  update();
+  mockIntervalId = setInterval(update, pollInterval);
+}
+
+function startBrowserLocation() {
+  if (!navigator.geolocation) return;
+
+  requestBrowserPosition();
+
+  watchId = navigator.geolocation.watchPosition(
+    updateFromBrowserPosition,
+    () => {
+      // Permission denied or error — keep the previous known position.
+    },
+    geolocationOptions
+  );
+
+  pollIntervalId = setInterval(() => {
+    requestBrowserPosition();
+  }, GEOLOCATION_POLL_INTERVAL_MS);
+}
+
+function startLocationUpdates() {
+  if (USE_MOCK) {
+    startMockLocation();
+    return;
+  }
+
+  // Dev override already applied by initialPosition — nothing more to do.
+  const devLat = process.env.NEXT_PUBLIC_DEV_LAT;
+  const devLon = process.env.NEXT_PUBLIC_DEV_LON;
+  if (devLat && devLon) return;
+
+  startBrowserLocation();
+}
+
+function stopLocationUpdates() {
+  if (mockIntervalId !== null) {
+    clearInterval(mockIntervalId);
+    mockIntervalId = null;
+  }
+  if (pollIntervalId !== null) {
+    clearInterval(pollIntervalId);
+    pollIntervalId = null;
+  }
+  if (watchId !== null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+}
+
+function subscribe(callback: () => void): () => void {
+  const shouldStart = subscribers.size === 0;
+  subscribers.add(callback);
+  if (shouldStart) startLocationUpdates();
+  return () => {
+    subscribers.delete(callback);
+    if (subscribers.size === 0) stopLocationUpdates();
+  };
+}
+
+function getSnapshot(): GeoPosition | null {
+  return snapshot;
+}
+
+function getServerSnapshot(): GeoPosition | null {
+  return snapshot;
+}
+
 export function useGeolocation() {
-  const [position, setPosition] = useState<GeoPosition | null>(initialPosition);
-
-  useEffect(() => {
-    if (USE_MOCK) {
-      const update = () => {
-        const pos = getMockUserPosition();
-        console.log(`[Geolocation] Mock: ${getMockScenarioLabel()}`, pos);
-        setPosition(pos);
-      };
-      // Poll faster than scenario interval to stay in sync (min 500ms, max 5s)
-      const pollInterval = Math.max(500, Math.min(5_000, Math.floor(SCENARIO_INTERVAL_MS / 6)));
-      update();
-      const interval = setInterval(update, pollInterval);
-      return () => clearInterval(interval);
-    }
-
-    // Dev override already applied by initialPosition — nothing more to do
-    const devLat = process.env.NEXT_PUBLIC_DEV_LAT;
-    const devLon = process.env.NEXT_PUBLIC_DEV_LON;
-    if (devLat && devLon) return;
-
-    if (!navigator.geolocation) return;
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setPosition({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        });
-      },
-      () => {
-        // Permission denied or error — position stays null
-      }
-    );
-  }, []);
-
-  return position;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 /** Haversine distance in meters between two points */
