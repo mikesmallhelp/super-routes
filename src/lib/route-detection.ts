@@ -143,18 +143,20 @@ export function detectActiveLeg(
 
   for (let ci = 0; ci < connections.length; ci++) {
     const conn = connections[ci];
-    const connStart = new Date(conn.start);
-    const connEnd = new Date(conn.end);
-
-    // Only consider connections that are in progress
-    if (now < connStart || now > connEnd) continue;
+    // (Connection-level time check removed — leg-level checks are sufficient
+    // and more permissive for users who arrived before scheduled origin time.)
 
     for (const leg of conn.legs) {
       // Skip walking legs
       if (leg.mode === "WALK") continue;
 
-      const legStart = new Date(leg.start.scheduledTime);
-      const legEnd = new Date(leg.end.scheduledTime);
+      // Use realtime times when available so delayed buses are still matched.
+      const legStart = leg.start.estimated?.time
+        ? new Date(leg.start.estimated.time)
+        : new Date(leg.start.scheduledTime);
+      const legEnd = leg.end.estimated?.time
+        ? new Date(leg.end.estimated.time)
+        : new Date(leg.end.scheduledTime);
 
       // Only consider legs that are in progress
       if (now < legStart || now > legEnd) continue;
@@ -164,7 +166,23 @@ export function detectActiveLeg(
 
       const closest = findClosestStop(stops, userLat, userLon);
 
-      if (closest.distance < MAX_DISTANCE_M && closest.distance < bestDistance) {
+      if (closest.distance >= MAX_DISTANCE_M) continue;
+
+      // Stale-leg guard: if the user is at the FROM stop and the leg started
+      // more than 3 minutes ago, they almost certainly didn't board.
+      // (The bus already left, user is still standing at the stop.)
+      if (closest.index === 0) {
+        const minutesSinceStart = (now.getTime() - legStart.getTime()) / 60000;
+        if (minutesSinceStart > 3) {
+          console.log(
+            `[Detection] Skip stale leg ${leg.trip?.routeShortName}: user at FROM ` +
+              `stop ${stops[0].name} but leg started ${minutesSinceStart.toFixed(1)} min ago`
+          );
+          continue;
+        }
+      }
+
+      if (closest.distance < bestDistance) {
         bestDistance = closest.distance;
 
         const stopsWithStatus: StopOnRoute[] = stops.map((s, i) => ({
@@ -224,9 +242,18 @@ export function detectJourneyState(
   userLat: number,
   userLon: number
 ): JourneyState | null {
+  console.log(
+    `[Detection] Yritetään tunnistaa: ${connections.length} yhteyttä, käyttäjä @${userLat.toFixed(5)},${userLon.toFixed(5)}`
+  );
+
   const active = detectActiveLeg(connections, userLat, userLon);
   if (active) {
     const legIndex = connections[active.connectionIndex].legs.indexOf(active.leg);
+    const currentStop = active.stops.find((s) => s.status === "current");
+    console.log(
+      `[Detection] On-vehicle: ${active.leg.trip?.routeShortName} → ${active.leg.trip?.tripHeadsign}, ` +
+        `pysäkki ${currentStop?.name}`
+    );
     return {
       connectionIndex: active.connectionIndex,
       legIndex,
@@ -245,15 +272,19 @@ export function detectJourneyState(
 
   for (let ci = 0; ci < connections.length; ci++) {
     const conn = connections[ci];
-    const connStart = new Date(conn.start);
     const connEnd = new Date(conn.end);
-    if (now < connStart || now > connEnd) continue;
+    // Skip only fully-ended connections; users may be early before connStart
+    if (now > connEnd) continue;
 
     for (let li = 0; li < conn.legs.length; li++) {
       const leg = conn.legs[li];
       if (leg.mode === "WALK" || !leg.trip || !leg.from.stop) continue;
 
-      const legStart = new Date(leg.start.scheduledTime);
+      // Use realtime time when available — a delayed bus may still be upcoming
+      // even though scheduledTime is in the past
+      const legStart = leg.start.estimated?.time
+        ? new Date(leg.start.estimated.time)
+        : new Date(leg.start.scheduledTime);
       if (legStart <= now) continue;
 
       // Skip only if a previous TRANSIT leg is still in progress (user still on bus).
@@ -299,6 +330,10 @@ export function detectJourneyState(
   }
 
   if (best) {
+    console.log(
+      `[Detection] Waiting: ${best.arrival.routeShortName} → ${best.arrival.headsign} ` +
+        `pysäkillä ${best.arrival.stopName}, ${best.arrival.minutesUntil} min`
+    );
     return {
       connectionIndex: best.connectionIndex,
       legIndex: best.legIndex,
@@ -306,6 +341,32 @@ export function detectJourneyState(
       upcomingArrival: best.arrival,
     };
   }
+
+  // Diagnostics: figure out why nothing matched
+  const reasons: string[] = [];
+  for (let ci = 0; ci < connections.length; ci++) {
+    const conn = connections[ci];
+    const cEnd = new Date(conn.end);
+    if (now > cEnd) {
+      reasons.push(`yhteys #${ci}: päättynyt ${cEnd.toLocaleTimeString("fi-FI")}`);
+      continue;
+    }
+    for (let li = 0; li < conn.legs.length; li++) {
+      const leg = conn.legs[li];
+      if (leg.mode === "WALK" || !leg.trip || !leg.from.stop) continue;
+      const legStart = leg.start.estimated?.time
+        ? new Date(leg.start.estimated.time)
+        : new Date(leg.start.scheduledTime);
+      if (legStart <= now) continue;
+      const dist = Math.round(
+        distanceMeters(userLat, userLon, leg.from.lat, leg.from.lon)
+      );
+      reasons.push(
+        `${leg.trip.routeShortName}@${leg.from.stop.name}: ${dist} m, ${Math.round((legStart.getTime() - now.getTime()) / 60000)} min`
+      );
+    }
+  }
+  console.log("[Detection] Ei tunnistettu. Lähimmät vaihtoehdot:", reasons.slice(0, 10));
 
   return null;
 }

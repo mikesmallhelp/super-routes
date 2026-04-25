@@ -24,13 +24,21 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
   const mode = trip.vehicleFilterMode ?? "and";
   const userPos = useGeolocation();
 
+  // Combine past + current connections for journey detection. Past covers
+  // trips that started before now (active mode); current covers trips that
+  // start in the future (waiting at stop before bus arrives).
+  const detectionConnections = useMemo(
+    () => [...pastConnections, ...connections],
+    [pastConnections, connections]
+  );
+
   const journeyState = useMemo(() => {
-    if (!userPos || pastConnections.length === 0) return null;
-    return detectJourneyState(pastConnections, userPos.latitude, userPos.longitude);
-  }, [pastConnections, userPos]);
+    if (!userPos || detectionConnections.length === 0) return null;
+    return detectJourneyState(detectionConnections, userPos.latitude, userPos.longitude);
+  }, [detectionConnections, userPos]);
 
   const activeConnection =
-    journeyState ? pastConnections[journeyState.connectionIndex] : null;
+    journeyState ? detectionConnections[journeyState.connectionIndex] : null;
 
   // Compute which leg should be rendered as the "upcoming trip card":
   //   - waiting: the leg the user is waiting for (== activeIdx)
