@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { SessionProvider } from "next-auth/react";
+import { ErudaLoader } from "@/components/eruda-loader";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="fi">
       <body className="antialiased">
+        <ErudaLoader />
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
