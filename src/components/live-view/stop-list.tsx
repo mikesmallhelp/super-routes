@@ -169,12 +169,6 @@ export function StopList({ activeLeg }: StopListProps) {
                         ? formatTime(stop.realtimeTime)
                         : stop.scheduledTime && formatTime(stop.scheduledTime)}
                     </div>
-                    {stop.delaySeconds !== undefined && Math.abs(stop.delaySeconds) >= 60 && (
-                      <div className={stop.delaySeconds > 0 ? "text-red-600" : "text-amber-600"}>
-                        {stop.delaySeconds > 0 ? "+" : ""}
-                        {Math.round(stop.delaySeconds / 60)} min
-                      </div>
-                    )}
                   </div>
                 </div>
               );

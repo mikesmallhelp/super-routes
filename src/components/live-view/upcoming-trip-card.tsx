@@ -39,6 +39,13 @@ export function UpcomingTripCard({
   const shortName = leg.trip?.routeShortName;
   const headsign = leg.trip?.tripHeadsign;
   const stops = buildStopList(leg);
+  const startDelayMin = leg.start.estimated?.time
+    ? Math.round(
+        (new Date(leg.start.estimated.time).getTime() -
+          new Date(leg.start.scheduledTime).getTime()) /
+          60_000
+      )
+    : null;
 
   const prevDep = usePreviousDeparture(
     showPreviousDeparture ? leg.from.stop?.gtfsId : undefined,
@@ -69,6 +76,12 @@ export function UpcomingTripCard({
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">
             {formatTime(leg.start.scheduledTime)}–{formatTime(leg.end.scheduledTime)}
           </span>
+          {startDelayMin !== null && startDelayMin >= 1 && (
+            <span className="ml-2 text-xs text-red-600 font-medium">+{startDelayMin} min myöhässä</span>
+          )}
+          {startDelayMin !== null && startDelayMin <= -1 && (
+            <span className="ml-2 text-xs text-amber-600 font-medium">{startDelayMin} min edellä</span>
+          )}
         </div>
 
         {canCatchPreviousDeparture && (
@@ -109,12 +122,6 @@ export function UpcomingTripCard({
                     >
                       {formatTime(stop.realtimeTime ?? stop.scheduledTime)}
                     </div>
-                    {delayMin !== null && Math.abs(delayMin) >= 1 && (
-                      <div className={delayMin > 0 ? "text-red-600" : "text-amber-600"}>
-                        {delayMin > 0 ? "+" : ""}
-                        {delayMin} min
-                      </div>
-                    )}
                   </div>
                 </div>
               );
