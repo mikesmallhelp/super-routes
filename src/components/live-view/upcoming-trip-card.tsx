@@ -72,7 +72,7 @@ export function UpcomingTripCard({
         </div>
 
         {canCatchPreviousDeparture && (
-          <div className="text-xs text-muted-foreground italic mb-3">
+          <div className="mb-3 w-fit rounded-md border border-green-300 bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-800 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200">
             Edellinen lähtö: {formatTime(prevTime)}
           </div>
         )}
