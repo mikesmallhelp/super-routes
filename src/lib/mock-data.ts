@@ -22,10 +22,10 @@ interface MockScenario {
 
 const SCENARIOS: MockScenario[] = [
   // Walk 1: Kivilammentie 1 → Kolmperänristi
-  { progressMin: -47,   userLat: 60.260725, userLon: 24.506763, label: "Kävelee: Kivilammentie 1" },
-  { progressMin: -40,   userLat: 60.25801,  userLon: 24.51255,  label: "Kävelee kohti Kolmperänristiä (1/3)" },
-  { progressMin: -33,   userLat: 60.25529,  userLon: 24.51833,  label: "Kävelee kohti Kolmperänristiä (2/3)" },
-  { progressMin: -27,   userLat: 60.25300,  userLon: 24.52300,  label: "Lähestyy Kolmperänristiä" },
+  { progressMin: -47,   userLat: 60.260725, userLon: 24.506763, label: "Walking: Kivilammentie 1" },
+  { progressMin: -40,   userLat: 60.25801,  userLon: 24.51255,  label: "Walking toward Kolmperänristi (1/3)" },
+  { progressMin: -33,   userLat: 60.25529,  userLon: 24.51833,  label: "Walking toward Kolmperänristi (2/3)" },
+  { progressMin: -27,   userLat: 60.25300,  userLon: 24.52300,  label: "Approaching Kolmperänristi" },
 
   // Bus 247: Kolmperänristi → Ikea Espoo (15 stops)
   { progressMin: -24.5, userLat: 60.25249,  userLon: 24.52427,  label: "247: Kolmperänristi" },
@@ -42,47 +42,48 @@ const SCENARIOS: MockScenario[] = [
   { progressMin: -14.6, userLat: 60.22106,  userLon: 24.64406,  label: "247: Pitkäniitty" },
   { progressMin: -13.7, userLat: 60.22154,  userLon: 24.65273,  label: "247: Miilukorventie" },
   { progressMin: -12.8, userLat: 60.22298,  userLon: 24.66,     label: "247: Ylämyllyntie" },
-  { progressMin: -11.9, userLat: 60.218001, userLon: 24.661122, label: "247 saapuu Ikea Espooseen" },
+  { progressMin: -11.9, userLat: 60.218001, userLon: 24.661122, label: "247 arrives at Ikea Espoo" },
 
   // Walk 2: Ikea Espoo stop change
-  { progressMin: -9, userLat: 60.21878, userLon: 24.66194, label: "Kävelee Ikea Espoon pysäkille" },
+  { progressMin: -9, userLat: 60.21878, userLon: 24.66194, label: "Walking to the Ikea Espoo stop" },
 
   // Bus 530: Ikea Espoo → Iskostie (20 stops)
   { progressMin: -4.5, userLat: 60.21878,  userLon: 24.66194,  label: "530: Ikea Espoo" },
-  { progressMin: -4.0, userLat: 60.22162,  userLon: 24.671849, label: "530: Fallåker" },
-  { progressMin: -3.5, userLat: 60.223356, userLon: 24.689578, label: "530: Jorvi" },
-  { progressMin: -3.0, userLat: 60.22459,  userLon: 24.70664,  label: "530: Petas" },
-  { progressMin: -2.5, userLat: 60.22812,  userLon: 24.71094,  label: "530: Kolkeranta" },
-  { progressMin: -2.0, userLat: 60.232085, userLon: 24.716303, label: "530: Auroran koulu" },
-  { progressMin: -1.5, userLat: 60.23562,  userLon: 24.72505,  label: "530: Vilniemi" },
-  { progressMin: -1.0, userLat: 60.24064,  userLon: 24.74186,  label: "530: Lähderannanristi" },
-  { progressMin: -0.5, userLat: 60.24387,  userLon: 24.7488,   label: "530: Kuttulammentie" },
-  { progressMin: 0,    userLat: 60.250577, userLon: 24.764382, label: "530: Huvilamäki" },
-  { progressMin: 0.5,  userLat: 60.253682, userLon: 24.775001, label: "530: Jupperinympyrä" },
-  { progressMin: 1,    userLat: 60.25474,  userLon: 24.78064,  label: "530: Linnaistentie" },
-  { progressMin: 1.5,  userLat: 60.25537,  userLon: 24.80147,  label: "530: Terhotie" },
-  { progressMin: 2,    userLat: 60.255369, userLon: 24.808008, label: "530: Pähkinärinteentie" },
-  { progressMin: 2.5,  userLat: 60.254197, userLon: 24.815768, label: "530: Koivuvaarankuja" },
-  { progressMin: 3,    userLat: 60.253851, userLon: 24.822685, label: "530: Köysikuja" },
-  { progressMin: 3.5,  userLat: 60.25561,  userLon: 24.82723,  label: "530: Vapaalanpolku" },
-  { progressMin: 4,    userLat: 60.258998, userLon: 24.836402, label: "530: Lastutie" },
-  { progressMin: 4.5,  userLat: 60.25903,  userLon: 24.844529, label: "530: Raappavuorentie" },
-  { progressMin: 5,    userLat: 60.25907,  userLon: 24.852743, label: "530 saapuu Iskostielle" },
+  { progressMin: -3.0, userLat: 60.21878,  userLon: 24.66194,  label: "530: Ikea Espoo" },
+  { progressMin: -2.4, userLat: 60.22162,  userLon: 24.671849, label: "530: Fallåker" },
+  { progressMin: -1.8, userLat: 60.223356, userLon: 24.689578, label: "530: Jorvi" },
+  { progressMin: -1.3, userLat: 60.22459,  userLon: 24.70664,  label: "530: Petas" },
+  { progressMin: -0.7, userLat: 60.22812,  userLon: 24.71094,  label: "530: Kolkeranta" },
+  { progressMin: -0.1, userLat: 60.232085, userLon: 24.716303, label: "530: Auroran koulu" },
+  { progressMin: 0.5,  userLat: 60.23562,  userLon: 24.72505,  label: "530: Vilniemi" },
+  { progressMin: 1.1,  userLat: 60.24064,  userLon: 24.74186,  label: "530: Lähderannanristi" },
+  { progressMin: 1.6,  userLat: 60.24387,  userLon: 24.7488,   label: "530: Kuttulammentie" },
+  { progressMin: 2.2,  userLat: 60.250577, userLon: 24.764382, label: "530: Huvilamäki" },
+  { progressMin: 2.8,  userLat: 60.253682, userLon: 24.775001, label: "530: Jupperinympyrä" },
+  { progressMin: 3.4,  userLat: 60.25474,  userLon: 24.78064,  label: "530: Linnaistentie" },
+  { progressMin: 3.9,  userLat: 60.25537,  userLon: 24.80147,  label: "530: Terhotie" },
+  { progressMin: 4.5,  userLat: 60.255369, userLon: 24.808008, label: "530: Pähkinärinteentie" },
+  { progressMin: 5.1,  userLat: 60.254197, userLon: 24.815768, label: "530: Koivuvaarankuja" },
+  { progressMin: 5.7,  userLat: 60.253851, userLon: 24.822685, label: "530: Köysikuja" },
+  { progressMin: 6.3,  userLat: 60.25561,  userLon: 24.82723,  label: "530: Vapaalanpolku" },
+  { progressMin: 6.8,  userLat: 60.258998, userLon: 24.836402, label: "530: Lastutie" },
+  { progressMin: 7.4,  userLat: 60.25903,  userLon: 24.844529, label: "530: Raappavuorentie" },
+  { progressMin: 8.0,  userLat: 60.25907,  userLon: 24.852743, label: "530 arrives at Iskostie" },
 
   // Waiting at Iskostie for bus 560 (530 ended, 560 not yet started)
-  { progressMin: 9, userLat: 60.25907, userLon: 24.852743, label: "Odottaa 560 Iskostiellä" },
+  { progressMin: 9, userLat: 60.25907, userLon: 24.852743, label: "Waiting for 560 at Iskostie" },
 
   // Bus 560: Iskostie → Silvola (5 stops)
-  { progressMin: 12.5, userLat: 60.25907,  userLon: 24.852743, label: "560: Iskostie" },
-  { progressMin: 13.5, userLat: 60.260899, userLon: 24.8567,   label: "560: Myyrmäen asema" },
-  { progressMin: 14.5, userLat: 60.263692, userLon: 24.859619, label: "560: Ojahaantie" },
-  { progressMin: 15.5, userLat: 60.263299, userLon: 24.869046, label: "560: Vaskivuori" },
-  { progressMin: 16.5, userLat: 60.265006, userLon: 24.883116, label: "560 saapuu Silvolaan" },
+  { progressMin: 15, userLat: 60.25907,  userLon: 24.852743, label: "560: Iskostie" },
+  { progressMin: 17, userLat: 60.260899, userLon: 24.8567,   label: "560: Myyrmäen asema" },
+  { progressMin: 19, userLat: 60.263692, userLon: 24.859619, label: "560: Ojahaantie" },
+  { progressMin: 21, userLat: 60.263299, userLon: 24.869046, label: "560: Vaskivuori" },
+  { progressMin: 23, userLat: 60.265006, userLon: 24.883116, label: "560 arrives at Silvola" },
 
   // Walk 3: Silvola → Vetotie 3
-  { progressMin: 22,   userLat: 60.265006, userLon: 24.883116, label: "Kävelee: Silvola" },
-  { progressMin: 25,   userLat: 60.26661,  userLon: 24.87968,  label: "Kävelee kohti Vetotietä" },
-  { progressMin: 28,   userLat: 60.268214, userLon: 24.876241, label: "Lähestyy Vetotie 3" },
+  { progressMin: 23.5, userLat: 60.265006, userLon: 24.883116, label: "Walking: Silvola" },
+  { progressMin: 25.5, userLat: 60.26661,  userLon: 24.87968,  label: "Walking toward Vetotie" },
+  { progressMin: 28,   userLat: 60.268214, userLon: 24.876241, label: "Approaching Vetotie 3" },
 ];
 
 export const SCENARIO_INTERVAL_MS = (() => {

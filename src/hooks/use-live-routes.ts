@@ -5,7 +5,8 @@ import type { Connection, SavedTrip, VehicleFilterMode } from "@/lib/types";
 import { generateMockConnections, SCENARIO_INTERVAL_MS } from "@/lib/mock-data";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
-const REFRESH_INTERVAL_MS = USE_MOCK ? SCENARIO_INTERVAL_MS : 30_000;
+const MOCK_REFRESH_INTERVAL_MS = Math.max(500, Math.min(5_000, Math.floor(SCENARIO_INTERVAL_MS / 6)));
+const REFRESH_INTERVAL_MS = USE_MOCK ? MOCK_REFRESH_INTERVAL_MS : 30_000;
 
 interface RoutesResponse {
   connections: Connection[];
