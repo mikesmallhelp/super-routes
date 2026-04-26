@@ -66,8 +66,12 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
     const upcomingLeg = upcomingIdx !== null && upcomingIdx !== activeIdx ? legs[upcomingIdx] : null;
     const waitingLeg = journeyState.mode === "waiting" ? legs[activeIdx] : null;
     const futureAfter = upcomingIdx !== null ? legs.slice(upcomingIdx + 1) : [];
+    const activeLegEndTime =
+      journeyState.mode === "on-vehicle"
+        ? legs[activeIdx].end.estimated?.time ?? legs[activeIdx].end.scheduledTime
+        : undefined;
 
-    return { pastLegs, futureBefore, upcomingLeg, waitingLeg, futureAfter };
+    return { pastLegs, futureBefore, upcomingLeg, waitingLeg, futureAfter, activeLegEndTime };
   }, [journeyState, activeConnection]);
 
   return (
@@ -145,7 +149,11 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
 
           {/* The next upcoming trip after the current bus (on-vehicle mode) */}
           {layout.upcomingLeg && (
-            <UpcomingTripCard leg={layout.upcomingLeg} showPreviousDeparture />
+            <UpcomingTripCard
+              leg={layout.upcomingLeg}
+              showPreviousDeparture
+              earliestCatchTime={layout.activeLegEndTime}
+            />
           )}
 
           {/* Legs after the upcoming trip */}

@@ -376,3 +376,35 @@ export function generateMockConnections(): Connection[] {
 
   return [connection];
 }
+
+export function getMockPreviousDeparture(
+  stopGtfsId: string | undefined,
+  routeShortName: string | undefined,
+  beforeTime: string | undefined
+): { scheduledTime: string | null; realtimeTime?: string } {
+  if (!stopGtfsId || !routeShortName || !beforeTime) return { scheduledTime: null };
+
+  const { progressMin } = getCurrentScenario();
+  const previousDepartures: Record<string, { scheduledBaseMin: number; realtimeBaseMin?: number }> = {
+    // Previous 530 after the 247 arrival at Ikea Espoo, so the transfer is possible.
+    "HSL:2631217:530": { scheduledBaseMin: -10, realtimeBaseMin: -10 },
+    // Previous 560 before the delayed 530 arrival at Iskostie, so the transfer is not possible.
+    "HSL:4150297:560": { scheduledBaseMin: 7, realtimeBaseMin: 7 },
+  };
+
+  const departure = previousDepartures[`${stopGtfsId}:${routeShortName}`];
+  if (!departure) return { scheduledTime: null };
+
+  const scheduledTime = timeOffset(departure.scheduledBaseMin, progressMin);
+  if (new Date(scheduledTime).getTime() >= new Date(beforeTime).getTime()) {
+    return { scheduledTime: null };
+  }
+
+  return {
+    scheduledTime,
+    realtimeTime:
+      departure.realtimeBaseMin !== undefined
+        ? timeOffset(departure.realtimeBaseMin, progressMin)
+        : undefined,
+  };
+}

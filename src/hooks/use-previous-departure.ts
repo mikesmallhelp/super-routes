@@ -1,6 +1,9 @@
 "use client";
 
 import useSWR from "swr";
+import { getMockPreviousDeparture } from "@/lib/mock-data";
+
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
 
 interface PreviousDepartureResponse {
   scheduledTime: string | null;
@@ -32,9 +35,12 @@ export function usePreviousDeparture(
   routeShortName: string | undefined,
   beforeTime: string | undefined
 ) {
+  const mockData = USE_MOCK
+    ? getMockPreviousDeparture(stopGtfsId, routeShortName, beforeTime)
+    : null;
   const canFetch = !!stopGtfsId && !!routeShortName && !!beforeTime;
   const stableBefore = beforeTime ? roundToMinute(beforeTime) : undefined;
-  const url = canFetch
+  const url = canFetch && !USE_MOCK
     ? `/api/previous-departure?stopGtfsId=${encodeURIComponent(stopGtfsId)}&route=${encodeURIComponent(routeShortName)}&before=${encodeURIComponent(stableBefore!)}`
     : null;
 
@@ -46,7 +52,7 @@ export function usePreviousDeparture(
   });
 
   return {
-    scheduledTime: data?.scheduledTime ?? null,
-    realtimeTime: data?.realtimeTime,
+    scheduledTime: mockData?.scheduledTime ?? data?.scheduledTime ?? null,
+    realtimeTime: mockData?.realtimeTime ?? data?.realtimeTime,
   };
 }

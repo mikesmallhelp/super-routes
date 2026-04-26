@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildStopList } from "@/lib/route-detection";
 import { usePreviousDeparture } from "@/hooks/use-previous-departure";
+import { useNow } from "@/hooks/use-now";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fi-FI", {
@@ -27,9 +28,14 @@ function modeIcon(mode: string) {
 interface UpcomingTripCardProps {
   leg: Leg;
   showPreviousDeparture?: boolean;
+  earliestCatchTime?: string;
 }
 
-export function UpcomingTripCard({ leg, showPreviousDeparture = false }: UpcomingTripCardProps) {
+export function UpcomingTripCard({
+  leg,
+  showPreviousDeparture = false,
+  earliestCatchTime,
+}: UpcomingTripCardProps) {
   const shortName = leg.trip?.routeShortName;
   const headsign = leg.trip?.tripHeadsign;
   const stops = buildStopList(leg);
@@ -40,6 +46,12 @@ export function UpcomingTripCard({ leg, showPreviousDeparture = false }: Upcomin
     showPreviousDeparture ? leg.start.scheduledTime : undefined
   );
   const prevTime = prevDep.realtimeTime ?? prevDep.scheduledTime;
+  const now = useNow();
+  const canCatchPreviousDeparture =
+    showPreviousDeparture &&
+    prevTime &&
+    (!earliestCatchTime || new Date(prevTime).getTime() >= new Date(earliestCatchTime).getTime()) &&
+    new Date(prevTime).getTime() >= now;
 
   return (
     <Card className="w-full border-blue-400 border-2">
@@ -59,7 +71,7 @@ export function UpcomingTripCard({ leg, showPreviousDeparture = false }: Upcomin
           </span>
         </div>
 
-        {showPreviousDeparture && prevTime && (
+        {canCatchPreviousDeparture && (
           <div className="text-xs text-muted-foreground italic mb-3">
             Edellinen lähtö: {formatTime(prevTime)}
           </div>
