@@ -57,12 +57,12 @@ export function UpcomingArrivals({ arrivals }: UpcomingArrivalsProps) {
                     </span>
                     {delayMin !== null && delayMin >= 1 && (
                       <span className="text-xs text-red-600 font-medium shrink-0">
-                        +{delayMin} min
+                        +{delayMin} min myöhässä
                       </span>
                     )}
                     {delayMin !== null && delayMin <= -1 && (
                       <span className="text-xs text-amber-600 font-medium shrink-0">
-                        {delayMin} min
+                        {delayMin} min edellä
                       </span>
                     )}
                     <span className="font-bold tabular-nums shrink-0">
