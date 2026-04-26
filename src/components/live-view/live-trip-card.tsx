@@ -144,7 +144,9 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
           {layout.waitingLeg && <UpcomingTripCard leg={layout.waitingLeg} />}
 
           {/* The next upcoming trip after the current bus (on-vehicle mode) */}
-          {layout.upcomingLeg && <UpcomingTripCard leg={layout.upcomingLeg} />}
+          {layout.upcomingLeg && (
+            <UpcomingTripCard leg={layout.upcomingLeg} showPreviousDeparture />
+          )}
 
           {/* Legs after the upcoming trip */}
           {layout.futureAfter.map((leg, i) => (

@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildStopList } from "@/lib/route-detection";
 import { usePreviousDeparture } from "@/hooks/use-previous-departure";
-import { useNow } from "@/hooks/use-now";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fi-FI", {
@@ -27,23 +26,20 @@ function modeIcon(mode: string) {
 
 interface UpcomingTripCardProps {
   leg: Leg;
+  showPreviousDeparture?: boolean;
 }
 
-export function UpcomingTripCard({ leg }: UpcomingTripCardProps) {
+export function UpcomingTripCard({ leg, showPreviousDeparture = false }: UpcomingTripCardProps) {
   const shortName = leg.trip?.routeShortName;
   const headsign = leg.trip?.tripHeadsign;
   const stops = buildStopList(leg);
 
   const prevDep = usePreviousDeparture(
-    leg.from.stop?.gtfsId,
-    leg.trip?.routeShortName,
-    leg.start.scheduledTime
+    showPreviousDeparture ? leg.from.stop?.gtfsId : undefined,
+    showPreviousDeparture ? leg.trip?.routeShortName : undefined,
+    showPreviousDeparture ? leg.start.scheduledTime : undefined
   );
   const prevTime = prevDep.realtimeTime ?? prevDep.scheduledTime;
-  const now = useNow();
-  const prevMinutesAgo = prevTime
-    ? Math.round((now - new Date(prevTime).getTime()) / 60_000)
-    : null;
 
   return (
     <Card className="w-full border-blue-400 border-2">
@@ -63,17 +59,9 @@ export function UpcomingTripCard({ leg }: UpcomingTripCardProps) {
           </span>
         </div>
 
-        {prevTime && (
+        {showPreviousDeparture && prevTime && (
           <div className="text-xs text-muted-foreground italic mb-3">
             Edellinen lähtö: {formatTime(prevTime)}
-            {prevDep.realtimeTime &&
-              prevDep.scheduledTime &&
-              prevDep.realtimeTime !== prevDep.scheduledTime && (
-                <> (aikat. {formatTime(prevDep.scheduledTime)})</>
-              )}
-            {prevMinutesAgo !== null && prevMinutesAgo >= 0 && (
-              <> — {prevMinutesAgo} min sitten</>
-            )}
           </div>
         )}
 
