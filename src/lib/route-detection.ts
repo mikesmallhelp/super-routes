@@ -26,6 +26,7 @@ export interface ActiveLeg {
   leg: Leg;
   stops: StopOnRoute[];
   connectionIndex: number;
+  matchDistance: number;
 }
 
 const MAX_DISTANCE_M = 500;
@@ -194,6 +195,7 @@ export function detectActiveLeg(
           leg,
           stops: stopsWithStatus,
           connectionIndex: ci,
+          matchDistance: closest.distance,
         };
       }
     }
@@ -228,6 +230,7 @@ export interface JourneyState {
   connectionIndex: number;
   legIndex: number;
   mode: "on-vehicle" | "waiting" | "arrived";
+  matchDistance: number;
   activeLeg?: ActiveLeg;
   upcomingArrival?: UpcomingArrival;
   remainingWalk?: Leg;
@@ -258,6 +261,7 @@ function buildActiveLegAtStop(
   return {
     leg,
     connectionIndex,
+    matchDistance: 0,
     stops: stops.map((stop, index) => ({
       ...stop,
       status: index < stopIndex ? "passed" : index === stopIndex ? "current" : "upcoming",
@@ -295,6 +299,7 @@ export function detectJourneyState(
         connectionIndex: active.connectionIndex,
         legIndex,
         mode: "arrived",
+        matchDistance: active.matchDistance,
         activeLeg: active,
         remainingWalk: findRemainingWalk(connections[active.connectionIndex].legs, legIndex),
       };
@@ -308,6 +313,7 @@ export function detectJourneyState(
       connectionIndex: active.connectionIndex,
       legIndex,
       mode: "on-vehicle",
+      matchDistance: active.matchDistance,
       activeLeg: active,
     };
   }
@@ -339,6 +345,7 @@ export function detectJourneyState(
         connectionIndex: ci,
         legIndex: li,
         mode: "arrived",
+        matchDistance: dist,
         activeLeg: activeAtFinalStop,
         remainingWalk: findRemainingWalk(conn.legs, li),
       };
@@ -420,6 +427,7 @@ export function detectJourneyState(
       connectionIndex: best.connectionIndex,
       legIndex: best.legIndex,
       mode: "waiting",
+      matchDistance: best.distance,
       upcomingArrival: best.arrival,
     };
   }

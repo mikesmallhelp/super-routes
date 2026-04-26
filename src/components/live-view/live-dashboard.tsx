@@ -22,6 +22,7 @@ export function LiveDashboard() {
   const { trips, removeTrip, goBackToSetup } = useTrips();
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [isPaused, setIsPaused] = useState(() => (USE_MOCK ? isMockPaused() : false));
+  const [tripMatches, setTripMatches] = useState<Record<string, number | null>>({});
   const userPos = useGeolocation();
   const { mutate } = useSWRConfig();
 
@@ -79,6 +80,29 @@ export function LiveDashboard() {
     return withDistances.map((d) => d.trip);
   }, [trips, userPos]);
 
+  const handleJourneyStateChange = useCallback((tripId: string, matchDistance: number | null) => {
+    setTripMatches((prev) => {
+      if (prev[tripId] === matchDistance) return prev;
+      return { ...prev, [tripId]: matchDistance };
+    });
+  }, []);
+
+  const expandedTripId = useMemo(() => {
+    let bestTripId: string | null = null;
+    let bestDistance = Infinity;
+
+    for (const trip of sortedTrips) {
+      const matchDistance = tripMatches[trip.id];
+      if (matchDistance == null) continue;
+      if (matchDistance < bestDistance) {
+        bestDistance = matchDistance;
+        bestTripId = trip.id;
+      }
+    }
+
+    return bestTripId;
+  }, [sortedTrips, tripMatches]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -129,7 +153,13 @@ export function LiveDashboard() {
       </div>
 
       {sortedTrips.map((trip) => (
-        <LiveTripCard key={trip.id} trip={trip} onRemove={removeTrip} />
+        <LiveTripCard
+          key={trip.id}
+          trip={trip}
+          onRemove={removeTrip}
+          isExpanded={expandedTripId === trip.id}
+          onJourneyStateChange={handleJourneyStateChange}
+        />
       ))}
     </div>
   );

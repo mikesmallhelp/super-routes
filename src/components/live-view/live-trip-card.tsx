@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { SavedTrip } from "@/lib/types";
 import { useLiveRoutes } from "@/hooks/use-live-routes";
 import { ConnectionCard } from "@/components/trip-wizard/connection-card";
@@ -16,6 +16,8 @@ import { useGeolocation } from "@/hooks/use-geolocation";
 interface LiveTripCardProps {
   trip: SavedTrip;
   onRemove: (id: string) => void;
+  isExpanded: boolean;
+  onJourneyStateChange: (tripId: string, matchDistance: number | null) => void;
 }
 
 function ArrivalMessageCard({ hasRemainingWalk }: { hasRemainingWalk: boolean }) {
@@ -31,7 +33,7 @@ function ArrivalMessageCard({ hasRemainingWalk }: { hasRemainingWalk: boolean })
   );
 }
 
-export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
+export function LiveTripCard({ trip, onRemove, isExpanded, onJourneyStateChange }: LiveTripCardProps) {
   const { connections, pastConnections, isLoading, isValidating, error } = useLiveRoutes(trip);
   const hasIncluded = trip.selectedVehicles.length > 0;
   const hasExcluded = (trip.excludedVehicles ?? []).length > 0;
@@ -50,6 +52,10 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
     if (!userPos || detectionConnections.length === 0) return null;
     return detectJourneyState(detectionConnections, userPos.latitude, userPos.longitude);
   }, [detectionConnections, userPos]);
+
+  useEffect(() => {
+    onJourneyStateChange(trip.id, journeyState?.matchDistance ?? null);
+  }, [onJourneyStateChange, trip.id, journeyState]);
 
   const activeConnection =
     journeyState ? detectionConnections[journeyState.connectionIndex] : null;
@@ -148,7 +154,7 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
         <p className="text-destructive text-sm">Virhe ladattaessa reittejä.</p>
       )}
 
-      {journeyState && activeConnection && layout ? (
+      {isExpanded && journeyState && activeConnection && layout ? (
         <div className="space-y-2">
           {layout.pastLegs.map((leg, i) => (
             <LegCard key={`past-${i}`} leg={leg} variant="past" />
