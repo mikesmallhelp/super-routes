@@ -9,12 +9,26 @@ import { UpcomingArrivals } from "./upcoming-arrivals";
 import { UpcomingTripCard } from "./upcoming-trip-card";
 import { LegCard } from "./leg-card";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { detectJourneyState } from "@/lib/route-detection";
 import { useGeolocation } from "@/hooks/use-geolocation";
 
 interface LiveTripCardProps {
   trip: SavedTrip;
   onRemove: (id: string) => void;
+}
+
+function ArrivalMessageCard({ hasRemainingWalk }: { hasRemainingWalk: boolean }) {
+  return (
+    <Card className="w-full border-green-400 border-2">
+      <CardContent className="p-4">
+        <p className="text-sm font-semibold">Saavuit viimeiselle pysäkille.</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {hasRemainingWalk ? "Hyvää kävelyä kohteeseen!" : "Hyvää päivän jatkoa!"}
+        </p>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
@@ -71,7 +85,15 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
         ? legs[activeIdx].end.estimated?.time ?? legs[activeIdx].end.scheduledTime
         : undefined;
 
-    return { pastLegs, futureBefore, upcomingLeg, waitingLeg, futureAfter, activeLegEndTime };
+    return {
+      pastLegs,
+      futureBefore,
+      upcomingLeg,
+      waitingLeg,
+      futureAfter,
+      activeLegEndTime,
+      hasRemainingWalk: !!journeyState.remainingWalk,
+    };
   }, [journeyState, activeConnection]);
 
   return (
@@ -134,6 +156,9 @@ export function LiveTripCard({ trip, onRemove }: LiveTripCardProps) {
 
           {journeyState.mode === "on-vehicle" && journeyState.activeLeg && (
             <StopList activeLeg={journeyState.activeLeg} />
+          )}
+          {journeyState.mode === "arrived" && (
+            <ArrivalMessageCard hasRemainingWalk={layout.hasRemainingWalk} />
           )}
           {journeyState.mode === "waiting" && journeyState.upcomingArrival && (
             <UpcomingArrivals arrivals={[journeyState.upcomingArrival]} />

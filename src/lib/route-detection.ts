@@ -227,9 +227,42 @@ export interface UpcomingArrival {
 export interface JourneyState {
   connectionIndex: number;
   legIndex: number;
-  mode: "on-vehicle" | "waiting";
+  mode: "on-vehicle" | "waiting" | "arrived";
   activeLeg?: ActiveLeg;
   upcomingArrival?: UpcomingArrival;
+  remainingWalk?: Leg;
+}
+
+const ARRIVAL_GRACE_MS = 45 * 60 * 1000;
+
+function isTransitLeg(leg: Leg): boolean {
+  return leg.mode !== "WALK" && !!leg.trip;
+}
+
+function hasLaterTransitLeg(legs: Leg[], legIndex: number): boolean {
+  return legs.slice(legIndex + 1).some(isTransitLeg);
+}
+
+function findRemainingWalk(legs: Leg[], legIndex: number): Leg | undefined {
+  return legs.slice(legIndex + 1).find((leg) => leg.mode === "WALK");
+}
+
+function buildActiveLegAtStop(
+  leg: Leg,
+  connectionIndex: number,
+  stopIndex: number
+): ActiveLeg | null {
+  const stops = buildStopList(leg);
+  if (stops.length === 0 || stopIndex < 0 || stopIndex >= stops.length) return null;
+
+  return {
+    leg,
+    connectionIndex,
+    stops: stops.map((stop, index) => ({
+      ...stop,
+      status: index < stopIndex ? "passed" : index === stopIndex ? "current" : "upcoming",
+    })),
+  };
 }
 
 /**
@@ -250,6 +283,23 @@ export function detectJourneyState(
   if (active) {
     const legIndex = connections[active.connectionIndex].legs.indexOf(active.leg);
     const currentStop = active.stops.find((s) => s.status === "current");
+    if (
+      currentStop &&
+      active.stops.indexOf(currentStop) === active.stops.length - 1 &&
+      !hasLaterTransitLeg(connections[active.connectionIndex].legs, legIndex)
+    ) {
+      console.log(
+        `[Detection] Arrived at final transit stop: ${active.leg.trip?.routeShortName} → ${currentStop.name}`
+      );
+      return {
+        connectionIndex: active.connectionIndex,
+        legIndex,
+        mode: "arrived",
+        activeLeg: active,
+        remainingWalk: findRemainingWalk(connections[active.connectionIndex].legs, legIndex),
+      };
+    }
+
     console.log(
       `[Detection] On-vehicle: ${active.leg.trip?.routeShortName} → ${active.leg.trip?.tripHeadsign}, ` +
         `stop ${currentStop?.name}`
@@ -263,6 +313,38 @@ export function detectJourneyState(
   }
 
   const now = new Date();
+  for (let ci = 0; ci < connections.length; ci++) {
+    const conn = connections[ci];
+    for (let li = 0; li < conn.legs.length; li++) {
+      const leg = conn.legs[li];
+      if (!isTransitLeg(leg) || !leg.to.stop || hasLaterTransitLeg(conn.legs, li)) continue;
+
+      const legEnd = leg.end.estimated?.time
+        ? new Date(leg.end.estimated.time)
+        : new Date(leg.end.scheduledTime);
+      const ageMs = now.getTime() - legEnd.getTime();
+      if (ageMs < 0 || ageMs > ARRIVAL_GRACE_MS) continue;
+
+      const dist = distanceMeters(userLat, userLon, leg.to.lat, leg.to.lon);
+      if (dist > MAX_DISTANCE_M) continue;
+
+      const stops = buildStopList(leg);
+      const activeAtFinalStop = buildActiveLegAtStop(leg, ci, stops.length - 1);
+      if (!activeAtFinalStop) continue;
+
+      console.log(
+        `[Detection] Arrived at final transit stop after leg end: ${leg.trip?.routeShortName} → ${leg.to.stop.name}`
+      );
+      return {
+        connectionIndex: ci,
+        legIndex: li,
+        mode: "arrived",
+        activeLeg: activeAtFinalStop,
+        remainingWalk: findRemainingWalk(conn.legs, li),
+      };
+    }
+  }
+
   let best: {
     connectionIndex: number;
     legIndex: number;
