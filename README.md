@@ -66,6 +66,10 @@ npm run dev
 
 The app starts at http://localhost:3000.
 
+For local development you can also enable the built-in mock journey flow with `NEXT_PUBLIC_USE_MOCK_DATA=true` in `.env.local`. This is useful for testing location-based tracking and transfer states without live Digitransit data. `NEXT_PUBLIC_MOCK_INTERVAL_MS` controls how long each mock scenario stays active before advancing automatically. The yellow buttons in the live view let you pause the mock flow and step through the journey one phase at a time.
+
+![](doc/dev-picture1.png)
+
 ## Production deployment
 
 The recommended platform is **Vercel**. It has native Next.js support and handles builds, edge functions, and environment variables automatically.
