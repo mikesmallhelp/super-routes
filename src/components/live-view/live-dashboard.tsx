@@ -115,6 +115,11 @@ export function LiveDashboard() {
     });
   }, [sortedTrips]);
 
+  const visibleTrips = useMemo(() => {
+    if (!activeTripId) return sortedTrips;
+    return sortedTrips.filter((trip) => trip.id === activeTripId);
+  }, [activeTripId, sortedTrips]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -164,7 +169,7 @@ export function LiveDashboard() {
         </div>
       </div>
 
-      {sortedTrips.map((trip) => (
+      {visibleTrips.map((trip) => (
         <LiveTripCard
           key={trip.id}
           trip={trip}
