@@ -22,7 +22,8 @@ export function LiveDashboard() {
   const { trips, removeTrip, goBackToSetup } = useTrips();
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [isPaused, setIsPaused] = useState(() => (USE_MOCK ? isMockPaused() : false));
-  const [tripMatches, setTripMatches] = useState<Record<string, number | null>>({});
+  const [, setTripMatches] = useState<Record<string, number | null>>({});
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const userPos = useGeolocation();
   const { mutate } = useSWRConfig();
 
@@ -82,26 +83,37 @@ export function LiveDashboard() {
 
   const handleJourneyStateChange = useCallback((tripId: string, matchDistance: number | null) => {
     setTripMatches((prev) => {
-      if (prev[tripId] === matchDistance) return prev;
-      return { ...prev, [tripId]: matchDistance };
+      const next = prev[tripId] === matchDistance ? prev : { ...prev, [tripId]: matchDistance };
+
+      setActiveTripId((currentActiveTripId) => {
+        const activeTripStillExists = currentActiveTripId
+          ? sortedTrips.some((trip) => trip.id === currentActiveTripId)
+          : false;
+        const activeTripStillMatches =
+          currentActiveTripId !== null && next[currentActiveTripId] != null;
+
+        if (activeTripStillExists && activeTripStillMatches) {
+          return currentActiveTripId;
+        }
+
+        let bestTripId: string | null = null;
+        let bestDistance = Infinity;
+
+        for (const trip of sortedTrips) {
+          const candidateDistance = next[trip.id];
+          if (candidateDistance == null) continue;
+          if (candidateDistance < bestDistance) {
+            bestDistance = candidateDistance;
+            bestTripId = trip.id;
+          }
+        }
+
+        return bestTripId;
+      });
+
+      return next;
     });
-  }, []);
-
-  const expandedTripId = useMemo(() => {
-    let bestTripId: string | null = null;
-    let bestDistance = Infinity;
-
-    for (const trip of sortedTrips) {
-      const matchDistance = tripMatches[trip.id];
-      if (matchDistance == null) continue;
-      if (matchDistance < bestDistance) {
-        bestDistance = matchDistance;
-        bestTripId = trip.id;
-      }
-    }
-
-    return bestTripId;
-  }, [sortedTrips, tripMatches]);
+  }, [sortedTrips]);
 
   return (
     <div className="space-y-6">
@@ -157,7 +169,7 @@ export function LiveDashboard() {
           key={trip.id}
           trip={trip}
           onRemove={removeTrip}
-          isExpanded={expandedTripId === trip.id}
+          isExpanded={activeTripId === trip.id}
           onJourneyStateChange={handleJourneyStateChange}
         />
       ))}
