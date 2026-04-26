@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchPreviousDeparture } from "@/lib/digitransit";
+import { auth } from "@/lib/auth";
+import { recordDigitransitApiCall } from "@/lib/user-usage";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -15,6 +17,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const session = await auth();
+    await recordDigitransitApiCall(session?.user?.id);
     const result = await fetchPreviousDeparture(stopGtfsId, route, before);
     return NextResponse.json(result || { scheduledTime: null });
   } catch (error) {

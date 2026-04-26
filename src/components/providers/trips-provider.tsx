@@ -29,10 +29,20 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     fetch("/api/trips")
-      .then((res) => res.json())
+      .then(async (res) => {
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(text || `Failed to load trips (${res.status})`);
+        }
+        return text ? (JSON.parse(text) as SavedTrip[]) : [];
+      })
       .then((data: SavedTrip[]) => {
         setTrips(data);
         if (data.length > 0) setIsSetupDone(true);
+      })
+      .catch((error) => {
+        console.error("[TripsProvider] Failed to load trips:", error);
+        setTrips([]);
       })
       .finally(() => setLoading(false));
   }, []);

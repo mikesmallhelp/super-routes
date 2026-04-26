@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchRoutes } from "@/lib/digitransit";
+import { auth } from "@/lib/auth";
+import { recordDigitransitApiCall } from "@/lib/user-usage";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -13,6 +15,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const session = await auth();
+    await recordDigitransitApiCall(session?.user?.id);
     const connections = await fetchRoutes(origin, destination, numItineraries || 5, dateTime);
     return NextResponse.json({ connections });
   } catch (error) {

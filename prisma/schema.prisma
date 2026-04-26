@@ -7,20 +7,22 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  trips         Trip[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                                String    @id @default(cuid())
+  name                              String?
+  email                             String?   @unique
+  emailVerified                     DateTime?
+  image                             String?
+  accounts                          Account[]
+  sessions                          Session[]
+  trips                             Trip[]
+  lastUsedDate                      DateTime? @db.Date
+  digitransitApiCallsOnLastUsedDate Int       @default(0)
+  createdAt                         DateTime  @default(now())
+  updatedAt                         DateTime  @updatedAt
 }
 
 model Account {
-  id                String  @id @default(cuid())
+  id                String   @id @default(cuid())
   userId            String
   type              String
   provider          String
@@ -32,7 +34,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -58,20 +60,20 @@ model VerificationToken {
 }
 
 model Trip {
-  id               String   @id @default(cuid())
-  userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  originLabel      String
-  destinationLabel String
-  originLat        Float
-  originLon        Float
-  destLat          Float
-  destLon          Float
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originLabel       String
+  destinationLabel  String
+  originLat         Float
+  originLon         Float
+  destLat           Float
+  destLon           Float
   selectedVehicles  String[]
-  excludedVehicles  String[]  @default([])
-  vehicleFilterMode String    @default("and")
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  excludedVehicles  String[] @default([])
+  vehicleFilterMode String   @default("and")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([userId])
 }
