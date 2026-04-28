@@ -31,6 +31,15 @@ export interface Estimated {
   delay?: string;
 }
 
+export interface VehiclePosition {
+  lat: number;
+  lon: number;
+  heading?: number | null;
+  speed?: number | null;
+  lastUpdate?: string | null;
+  vehicleId?: string | null;
+}
+
 export interface Leg {
   mode: string;
   duration: number;
@@ -45,6 +54,7 @@ export interface Leg {
     tripHeadsign: string;
     routeShortName: string;
     gtfsId?: string;
+    vehiclePosition?: VehiclePosition | null;
   } | null;
 }
 

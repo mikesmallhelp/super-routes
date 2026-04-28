@@ -1,4 +1,4 @@
-import { Coordinates, Connection } from "./types";
+import { Coordinates, Connection, Leg, VehiclePosition } from "./types";
 
 const API_KEY = process.env.DIGITRANSIT_API_KEY!;
 const GEOCODE_URL = "https://api.digitransit.fi/geocoding/v1/search";
@@ -121,6 +121,17 @@ query PlanConnection(
             tripHeadsign
             routeShortName
             gtfsId
+            pattern {
+              vehiclePositions {
+                lat
+                lon
+                heading
+                speed
+                lastUpdate
+                vehicleId
+                trip { gtfsId }
+              }
+            }
           }
         }
       }
@@ -128,6 +139,65 @@ query PlanConnection(
   }
 }
 `;
+
+type GraphqlVehiclePosition = VehiclePosition & {
+  trip?: { gtfsId?: string | null } | null;
+};
+
+type GraphqlTrip = NonNullable<Leg["trip"]> & {
+  pattern?: {
+    vehiclePositions?: GraphqlVehiclePosition[] | null;
+  } | null;
+};
+
+type GraphqlLeg = Omit<Leg, "trip"> & {
+  trip: GraphqlTrip | null;
+};
+
+type GraphqlConnection = Omit<Connection, "legs"> & {
+  legs: GraphqlLeg[];
+};
+
+function pickVehiclePositionForTrip(trip: GraphqlTrip | null): VehiclePosition | null {
+  if (!trip?.gtfsId || !trip.pattern?.vehiclePositions?.length) return null;
+
+  const matchingPositions = trip.pattern.vehiclePositions.filter(
+    (position) => position.trip?.gtfsId === trip.gtfsId
+  );
+  if (matchingPositions.length === 0) return null;
+
+  const latestPosition = matchingPositions.reduce((best, current) => {
+    const bestTs = best.lastUpdate ? new Date(best.lastUpdate).getTime() : 0;
+    const currentTs = current.lastUpdate ? new Date(current.lastUpdate).getTime() : 0;
+    return currentTs > bestTs ? current : best;
+  });
+
+  return {
+    lat: latestPosition.lat,
+    lon: latestPosition.lon,
+    heading: latestPosition.heading,
+    speed: latestPosition.speed,
+    lastUpdate: latestPosition.lastUpdate,
+    vehicleId: latestPosition.vehicleId,
+  };
+}
+
+function mapConnection(edgeNode: GraphqlConnection): Connection {
+  return {
+    ...edgeNode,
+    legs: edgeNode.legs.map((leg) => ({
+      ...leg,
+      trip: leg.trip
+        ? {
+            tripHeadsign: leg.trip.tripHeadsign,
+            routeShortName: leg.trip.routeShortName,
+            gtfsId: leg.trip.gtfsId,
+            vehiclePosition: pickVehiclePositionForTrip(leg.trip),
+          }
+        : null,
+    })),
+  };
+}
 
 const PREV_DEPARTURE_QUERY = `
 query PrevDeparture($stopId: String!, $date: String!) {
@@ -248,5 +318,5 @@ export async function fetchRoutes(
   }
 
   const edges = data.data?.planConnection?.edges || [];
-  return edges.map((edge: { node: Connection }) => edge.node);
+  return edges.map((edge: { node: GraphqlConnection }) => mapConnection(edge.node));
 }

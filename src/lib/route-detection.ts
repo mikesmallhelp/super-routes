@@ -30,6 +30,9 @@ export interface ActiveLeg {
 }
 
 const MAX_DISTANCE_M = 500;
+const VEHICLE_MATCH_MAX_DISTANCE_M = 250;
+const VEHICLE_POSITION_MAX_AGE_MS = 90_000;
+const STOP_TIME_MATCH_TOLERANCE_MS = 6 * 60 * 1000;
 
 export interface StopWithTimes {
   name: string;
@@ -127,6 +130,29 @@ function findClosestStop(
   return { index: minIdx, distance: minDist };
 }
 
+function getVehicleMatchDistance(
+  leg: Leg,
+  userLat: number,
+  userLon: number
+): number | null {
+  const position = leg.trip?.vehiclePosition;
+  if (!position) return null;
+
+  const lastUpdateMs = position.lastUpdate ? new Date(position.lastUpdate).getTime() : null;
+  if (lastUpdateMs !== null && Date.now() - lastUpdateMs > VEHICLE_POSITION_MAX_AGE_MS) {
+    return null;
+  }
+
+  const distance = distanceMeters(userLat, userLon, position.lat, position.lon);
+  return distance <= VEHICLE_MATCH_MAX_DISTANCE_M ? distance : null;
+}
+
+function getClosestStopTimeDistanceMs(stops: StopWithTimes[], stopIndex: number, now: Date): number {
+  const stop = stops[stopIndex];
+  const referenceTime = stop.realtimeTime ?? stop.scheduledTime;
+  return Math.abs(now.getTime() - new Date(referenceTime).getTime());
+}
+
 /**
  * Detect if the user is currently on a transit leg.
  * Looks through connections that are currently in-progress and finds
@@ -165,14 +191,21 @@ export function detectActiveLeg(
       const stops = buildStopList(leg);
       if (stops.length === 0) continue;
 
+      const vehicleMatchDistance = getVehicleMatchDistance(leg, userLat, userLon);
       const closest = findClosestStop(stops, userLat, userLon);
 
-      if (closest.distance >= MAX_DISTANCE_M) continue;
+      if (vehicleMatchDistance === null && closest.distance >= MAX_DISTANCE_M) continue;
+      if (
+        vehicleMatchDistance === null &&
+        getClosestStopTimeDistanceMs(stops, closest.index, now) > STOP_TIME_MATCH_TOLERANCE_MS
+      ) {
+        continue;
+      }
 
       // Stale-leg guard: if the user is at the FROM stop and the leg started
       // more than 3 minutes ago, they almost certainly didn't board.
       // (The bus already left, user is still standing at the stop.)
-      if (closest.index === 0) {
+      if (vehicleMatchDistance === null && closest.index === 0) {
         const minutesSinceStart = (now.getTime() - legStart.getTime()) / 60000;
         if (minutesSinceStart > 3) {
           console.log(
@@ -183,8 +216,9 @@ export function detectActiveLeg(
         }
       }
 
-      if (closest.distance < bestDistance) {
-        bestDistance = closest.distance;
+      const candidateDistance = vehicleMatchDistance ?? closest.distance;
+      if (candidateDistance < bestDistance) {
+        bestDistance = candidateDistance;
 
         const stopsWithStatus: StopOnRoute[] = stops.map((s, i) => ({
           ...s,
