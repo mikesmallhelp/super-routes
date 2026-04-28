@@ -35,6 +35,7 @@ const VEHICLE_POSITION_MAX_AGE_MS = 90_000;
 const STOP_TIME_MATCH_TOLERANCE_MS = 6 * 60 * 1000;
 const SEGMENT_MATCH_MAX_DISTANCE_M = 400;
 const STOP_PROXIMITY_OVERRIDE_M = 150;
+const WAITING_STOP_MAX_DISTANCE_M = 150;
 const STOP_SWITCH_MARGIN_M = 40;
 const STOP_STATE_MAX_AGE_MS = 30 * 60 * 1000;
 
@@ -588,7 +589,7 @@ export function detectJourneyState(
       }
 
       const dist = distanceMeters(userLat, userLon, leg.from.lat, leg.from.lon);
-      if (dist > MAX_DISTANCE_M) continue;
+      if (dist > WAITING_STOP_MAX_DISTANCE_M) continue;
 
       if (!best || dist < best.distance) {
         const delaySec = computeDelaySeconds(leg.start.scheduledTime, leg.start.estimated);
