@@ -33,6 +33,12 @@ const MAX_DISTANCE_M = 500;
 const VEHICLE_MATCH_MAX_DISTANCE_M = 250;
 const VEHICLE_POSITION_MAX_AGE_MS = 90_000;
 const STOP_TIME_MATCH_TOLERANCE_MS = 6 * 60 * 1000;
+const SEGMENT_MATCH_MAX_DISTANCE_M = 400;
+const STOP_PROXIMITY_OVERRIDE_M = 150;
+const STOP_SWITCH_MARGIN_M = 40;
+const STOP_STATE_MAX_AGE_MS = 30 * 60 * 1000;
+
+const lastDetectedStopIndex = new Map<string, { index: number; updatedAt: number }>();
 
 export interface StopWithTimes {
   name: string;
@@ -153,6 +159,151 @@ function getClosestStopTimeDistanceMs(stops: StopWithTimes[], stopIndex: number,
   return Math.abs(now.getTime() - new Date(referenceTime).getTime());
 }
 
+function getStopTimeMs(stop: StopWithTimes): number {
+  return new Date(stop.realtimeTime ?? stop.scheduledTime).getTime();
+}
+
+function projectToMeters(lat: number, lon: number, refLat: number) {
+  const metersPerDegLat = 111_320;
+  const metersPerDegLon = Math.cos((refLat * Math.PI) / 180) * 111_320;
+  return {
+    x: lon * metersPerDegLon,
+    y: lat * metersPerDegLat,
+  };
+}
+
+function distanceToSegmentMeters(
+  userLat: number,
+  userLon: number,
+  startLat: number,
+  startLon: number,
+  endLat: number,
+  endLon: number
+): number {
+  const refLat = (userLat + startLat + endLat) / 3;
+  const p = projectToMeters(userLat, userLon, refLat);
+  const a = projectToMeters(startLat, startLon, refLat);
+  const b = projectToMeters(endLat, endLon, refLat);
+
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const abLenSq = abx * abx + aby * aby;
+  if (abLenSq === 0) {
+    const dx = p.x - a.x;
+    const dy = p.y - a.y;
+    return Math.hypot(dx, dy);
+  }
+
+  const apx = p.x - a.x;
+  const apy = p.y - a.y;
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLenSq));
+  const closestX = a.x + t * abx;
+  const closestY = a.y + t * aby;
+  return Math.hypot(p.x - closestX, p.y - closestY);
+}
+
+function getTemporalSegmentMatch(
+  stops: StopWithTimes[],
+  now: Date,
+  userLat: number,
+  userLon: number
+): { distance: number; currentIndex: number } | null {
+  if (stops.length < 2) return null;
+
+  const nowMs = now.getTime();
+  for (let i = 0; i < stops.length - 1; i++) {
+    const startMs = getStopTimeMs(stops[i]);
+    const endMs = getStopTimeMs(stops[i + 1]);
+    if (nowMs < startMs || nowMs > endMs) continue;
+
+    const distance = distanceToSegmentMeters(
+      userLat,
+      userLon,
+      stops[i].lat,
+      stops[i].lon,
+      stops[i + 1].lat,
+      stops[i + 1].lon
+    );
+    if (distance > SEGMENT_MATCH_MAX_DISTANCE_M) return null;
+
+    const midpointMs = startMs + (endMs - startMs) / 2;
+    return {
+      distance,
+      currentIndex: nowMs <= midpointMs ? i : i + 1,
+    };
+  }
+
+  return null;
+}
+
+function getLegDetectionKey(leg: Leg): string | null {
+  if (leg.trip?.gtfsId) return leg.trip.gtfsId;
+  if (!leg.trip?.routeShortName) return null;
+  return [
+    leg.trip.routeShortName,
+    leg.start.scheduledTime,
+    leg.from.stop?.code ?? leg.from.name,
+    leg.to.stop?.code ?? leg.to.name,
+  ].join("|");
+}
+
+function getStopDistanceMeters(
+  stops: StopWithTimes[],
+  stopIndex: number,
+  userLat: number,
+  userLon: number
+): number {
+  return distanceMeters(userLat, userLon, stops[stopIndex].lat, stops[stopIndex].lon);
+}
+
+function getStableStopIndex(
+  leg: Leg,
+  stops: StopWithTimes[],
+  candidateIndex: number,
+  now: Date,
+  userLat: number,
+  userLon: number
+): number {
+  const key = getLegDetectionKey(leg);
+  if (!key) return candidateIndex;
+
+  const previous = lastDetectedStopIndex.get(key);
+  if (!previous || now.getTime() - previous.updatedAt > STOP_STATE_MAX_AGE_MS) {
+    lastDetectedStopIndex.set(key, { index: candidateIndex, updatedAt: now.getTime() });
+    return candidateIndex;
+  }
+
+  const previousIndex = Math.min(previous.index, stops.length - 1);
+  if (candidateIndex === previousIndex) {
+    lastDetectedStopIndex.set(key, { index: candidateIndex, updatedAt: now.getTime() });
+    return candidateIndex;
+  }
+
+  if (Math.abs(candidateIndex - previousIndex) > 1) {
+    lastDetectedStopIndex.set(key, { index: candidateIndex, updatedAt: now.getTime() });
+    return candidateIndex;
+  }
+
+  const previousDistance = getStopDistanceMeters(stops, previousIndex, userLat, userLon);
+  const candidateDistance = getStopDistanceMeters(stops, candidateIndex, userLat, userLon);
+  const previousTimeDistance = getClosestStopTimeDistanceMs(stops, previousIndex, now);
+  const candidateTimeDistance = getClosestStopTimeDistanceMs(stops, candidateIndex, now);
+
+  const candidateClearlyBetter =
+    candidateDistance + STOP_SWITCH_MARGIN_M < previousDistance &&
+    candidateTimeDistance <= previousTimeDistance + 60_000;
+
+  const previousStillPlausible =
+    previousDistance <= MAX_DISTANCE_M &&
+    previousTimeDistance <= STOP_TIME_MATCH_TOLERANCE_MS;
+
+  const resolvedIndex =
+    candidateClearlyBetter || !previousStillPlausible ? candidateIndex : previousIndex;
+
+  lastDetectedStopIndex.set(key, { index: resolvedIndex, updatedAt: now.getTime() });
+  return resolvedIndex;
+}
+
 /**
  * Detect if the user is currently on a transit leg.
  * Looks through connections that are currently in-progress and finds
@@ -193,10 +344,23 @@ export function detectActiveLeg(
 
       const vehicleMatchDistance = getVehicleMatchDistance(leg, userLat, userLon);
       const closest = findClosestStop(stops, userLat, userLon);
+      const rawTemporalSegmentMatch =
+        vehicleMatchDistance === null
+          ? getTemporalSegmentMatch(stops, now, userLat, userLon)
+          : null;
+      const temporalSegmentMatch =
+        closest.distance > STOP_PROXIMITY_OVERRIDE_M ? rawTemporalSegmentMatch : null;
 
-      if (vehicleMatchDistance === null && closest.distance >= MAX_DISTANCE_M) continue;
       if (
         vehicleMatchDistance === null &&
+        temporalSegmentMatch === null &&
+        closest.distance >= MAX_DISTANCE_M
+      ) {
+        continue;
+      }
+      if (
+        vehicleMatchDistance === null &&
+        temporalSegmentMatch === null &&
         getClosestStopTimeDistanceMs(stops, closest.index, now) > STOP_TIME_MATCH_TOLERANCE_MS
       ) {
         continue;
@@ -216,13 +380,16 @@ export function detectActiveLeg(
         }
       }
 
-      const candidateDistance = vehicleMatchDistance ?? closest.distance;
+      const rawStatusIndex = temporalSegmentMatch?.currentIndex ?? closest.index;
+      const statusIndex = getStableStopIndex(leg, stops, rawStatusIndex, now, userLat, userLon);
+      const candidateDistance =
+        vehicleMatchDistance ?? temporalSegmentMatch?.distance ?? closest.distance;
       if (candidateDistance < bestDistance) {
         bestDistance = candidateDistance;
 
         const stopsWithStatus: StopOnRoute[] = stops.map((s, i) => ({
           ...s,
-          status: i < closest.index ? "passed" : i === closest.index ? "current" : "upcoming",
+          status: i < statusIndex ? "passed" : i === statusIndex ? "current" : "upcoming",
         }));
 
         bestMatch = {
