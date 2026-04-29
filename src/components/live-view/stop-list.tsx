@@ -215,25 +215,29 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
   return (
     <Card className="w-full border-green-400 border-2">
       <CardContent className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <span>{modeIcon(leg.mode)}</span>
-          {shortName && (
-            <Badge variant="secondary" className="text-sm font-bold">
-              {shortName}
-            </Badge>
-          )}
-          {headsign && (
-            <span className="text-sm text-muted-foreground">→ {headsign}</span>
-          )}
-          <span className="ml-auto text-xs text-green-700 font-medium">
-            Matkalla
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span>{modeIcon(leg.mode)}</span>
+            {shortName && (
+              <Badge variant="secondary" className="shrink-0 text-sm font-bold">
+                {shortName}
+              </Badge>
+            )}
+            {headsign && (
+              <span className="min-w-0 truncate text-sm text-muted-foreground">
+                → {headsign}
+              </span>
+            )}
+          </div>
+          <div className="shrink-0 text-right text-xs font-medium text-green-700">
+            <div>Matkalla</div>
             {delayMin !== null && delayMin >= 1 && (
-              <span className="ml-2 text-red-600">+{delayMin} min myöhässä</span>
+              <div className="text-red-600">+{delayMin} min myöhässä</div>
             )}
             {delayMin !== null && delayMin <= -1 && (
-              <span className="ml-2 text-amber-600">{delayMin} min edellä</span>
+              <div className="text-amber-600">{delayMin} min edellä</div>
             )}
-          </span>
+          </div>
         </div>
 
         <div className="relative ml-3">
