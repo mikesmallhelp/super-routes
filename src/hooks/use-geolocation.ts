@@ -1,7 +1,12 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { getMockUserPosition, getMockScenarioLabel, SCENARIO_INTERVAL_MS } from "@/lib/mock-data";
+import {
+  getMockUserPosition,
+  getMockScenarioLabel,
+  SCENARIO_INTERVAL_MS,
+  subscribeMockChanges,
+} from "@/lib/mock-data";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
 const GEOLOCATION_POLL_INTERVAL_MS = 10_000;
@@ -26,6 +31,7 @@ function initialPosition(): GeoPosition | null {
 let snapshot: GeoPosition | null = initialPosition();
 const subscribers = new Set<() => void>();
 let mockIntervalId: ReturnType<typeof setInterval> | null = null;
+let mockUnsubscribe: (() => void) | null = null;
 let pollIntervalId: ReturnType<typeof setInterval> | null = null;
 let watchId: number | null = null;
 
@@ -67,6 +73,7 @@ function startMockLocation() {
   const pollInterval = Math.max(500, Math.min(5_000, Math.floor(SCENARIO_INTERVAL_MS / 6)));
   update();
   mockIntervalId = setInterval(update, pollInterval);
+  mockUnsubscribe = subscribeMockChanges(update);
 }
 
 function startBrowserLocation() {
@@ -105,6 +112,10 @@ function stopLocationUpdates() {
   if (mockIntervalId !== null) {
     clearInterval(mockIntervalId);
     mockIntervalId = null;
+  }
+  if (mockUnsubscribe !== null) {
+    mockUnsubscribe();
+    mockUnsubscribe = null;
   }
   if (pollIntervalId !== null) {
     clearInterval(pollIntervalId);

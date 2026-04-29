@@ -8,7 +8,7 @@ import { useSyncExternalStore } from "react";
  * useSyncExternalStore doesn't enter an update loop.
  */
 
-const INTERVAL_MS = 30_000;
+const INTERVAL_MS = 5_000;
 
 let snapshot = 0;
 const subscribers = new Set<() => void>();
@@ -41,7 +41,7 @@ function getServerSnapshot(): number {
 }
 
 /**
- * Returns the current Date.now() value, re-rendering every 30 s.
+ * Returns the current Date.now() value, re-rendering every 5 s.
  * Stable snapshot semantics keep React from rendering in a tight loop.
  */
 export function useNow(): number {

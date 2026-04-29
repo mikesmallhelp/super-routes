@@ -20,6 +20,71 @@ interface MockScenario {
   label: string;
 }
 
+interface MockStop {
+  progressMin: number;
+  userLat: number;
+  userLon: number;
+  name: string;
+}
+
+const MOCK_APPROACH_DISTANCE_M = 200;
+
+function mockDistanceMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function pointBeforeStop(from: MockStop, to: MockStop, metersBefore: number): Pick<MockScenario, "userLat" | "userLon"> {
+  const distance = mockDistanceMeters(from.userLat, from.userLon, to.userLat, to.userLon);
+  if (distance <= metersBefore) {
+    return { userLat: from.userLat, userLon: from.userLon };
+  }
+
+  const fraction = (distance - metersBefore) / distance;
+  return {
+    userLat: from.userLat + (to.userLat - from.userLat) * fraction,
+    userLon: from.userLon + (to.userLon - from.userLon) * fraction,
+  };
+}
+
+function buildTransitScenarios(routeShortName: string, stops: MockStop[]): MockScenario[] {
+  const scenarios: MockScenario[] = [];
+
+  for (let i = 0; i < stops.length; i++) {
+    const stop = stops[i];
+    if (i > 0) {
+      const previous = stops[i - 1];
+      const gapMin = stop.progressMin - previous.progressMin;
+      const approachOffsetMin = Math.min(0.2, Math.max(0.05, gapMin / 3));
+      scenarios.push({
+        progressMin: stop.progressMin - approachOffsetMin,
+        ...pointBeforeStop(previous, stop, MOCK_APPROACH_DISTANCE_M),
+        label: `${routeShortName}: approaching ${stop.name}`,
+      });
+    }
+
+    scenarios.push({
+      progressMin: stop.progressMin,
+      userLat: stop.userLat,
+      userLon: stop.userLon,
+      label: `${routeShortName}: ${stop.name}`,
+    });
+  }
+
+  return scenarios;
+}
+
 const SCENARIOS: MockScenario[] = [
   // Walk 1: Kivilammentie 1 → Kolmperänristi
   { progressMin: -47,   userLat: 60.260725, userLon: 24.506763, label: "Walking: Kivilammentie 1" },
@@ -28,57 +93,63 @@ const SCENARIOS: MockScenario[] = [
   { progressMin: -27,   userLat: 60.25300,  userLon: 24.52300,  label: "Approaching Kolmperänristi" },
 
   // Bus 247: Kolmperänristi → Ikea Espoo (15 stops)
-  { progressMin: -24.5, userLat: 60.25249,  userLon: 24.52427,  label: "247: Kolmperänristi" },
-  { progressMin: -23.6, userLat: 60.24904,  userLon: 24.53423,  label: "247: Kolmperä" },
-  { progressMin: -22.7, userLat: 60.247725, userLon: 24.542425, label: "247: Ämmässuo" },
-  { progressMin: -21.8, userLat: 60.24449,  userLon: 24.57063,  label: "247: Histansilta" },
-  { progressMin: -20.9, userLat: 60.24355,  userLon: 24.57839,  label: "247: Rauhamäki" },
-  { progressMin: -20.0, userLat: 60.23671,  userLon: 24.597885, label: "247: Nupurinristi" },
-  { progressMin: -19.1, userLat: 60.23408,  userLon: 24.60218,  label: "247: Veikkaustie" },
-  { progressMin: -18.2, userLat: 60.229864, userLon: 24.610592, label: "247: Hallava" },
-  { progressMin: -17.3, userLat: 60.225916, userLon: 24.618982, label: "247: Karhuniityntie" },
-  { progressMin: -16.4, userLat: 60.222895, userLon: 24.627954, label: "247: Kurutie" },
-  { progressMin: -15.5, userLat: 60.22181,  userLon: 24.63336,  label: "247: Karhunkynsi" },
-  { progressMin: -14.6, userLat: 60.22106,  userLon: 24.64406,  label: "247: Pitkäniitty" },
-  { progressMin: -13.7, userLat: 60.22154,  userLon: 24.65273,  label: "247: Miilukorventie" },
-  { progressMin: -12.8, userLat: 60.22298,  userLon: 24.66,     label: "247: Ylämyllyntie" },
-  { progressMin: -11.9, userLat: 60.218001, userLon: 24.661122, label: "247 arrives at Ikea Espoo" },
+  ...buildTransitScenarios("247", [
+    { progressMin: -24.5, userLat: 60.25249,  userLon: 24.52427,  name: "Kolmperänristi" },
+    { progressMin: -23.6, userLat: 60.24904,  userLon: 24.53423,  name: "Kolmperä" },
+    { progressMin: -22.7, userLat: 60.247725, userLon: 24.542425, name: "Ämmässuo" },
+    { progressMin: -21.8, userLat: 60.24449,  userLon: 24.57063,  name: "Histansilta" },
+    { progressMin: -20.9, userLat: 60.24355,  userLon: 24.57839,  name: "Rauhamäki" },
+    { progressMin: -20.0, userLat: 60.23671,  userLon: 24.597885, name: "Nupurinristi" },
+    { progressMin: -19.1, userLat: 60.23408,  userLon: 24.60218,  name: "Veikkaustie" },
+    { progressMin: -18.2, userLat: 60.229864, userLon: 24.610592, name: "Hallava" },
+    { progressMin: -17.3, userLat: 60.225916, userLon: 24.618982, name: "Karhuniityntie" },
+    { progressMin: -16.4, userLat: 60.222895, userLon: 24.627954, name: "Kurutie" },
+    { progressMin: -15.5, userLat: 60.22181,  userLon: 24.63336,  name: "Karhunkynsi" },
+    { progressMin: -14.6, userLat: 60.22106,  userLon: 24.64406,  name: "Pitkäniitty" },
+    { progressMin: -13.7, userLat: 60.22154,  userLon: 24.65273,  name: "Miilukorventie" },
+    { progressMin: -12.8, userLat: 60.22298,  userLon: 24.66,     name: "Ylämyllyntie" },
+    { progressMin: -11.9, userLat: 60.218001, userLon: 24.661122, name: "Ikea Espoo" },
+  ]),
 
   // Walk 2: Ikea Espoo stop change
   { progressMin: -9, userLat: 60.21878, userLon: 24.66194, label: "Walking to the Ikea Espoo stop" },
 
   // Bus 530: Ikea Espoo → Iskostie (20 stops)
   { progressMin: -4.5, userLat: 60.21878,  userLon: 24.66194,  label: "530: Ikea Espoo" },
-  { progressMin: -3.0, userLat: 60.21878,  userLon: 24.66194,  label: "530: Ikea Espoo" },
-  { progressMin: -2.4, userLat: 60.22162,  userLon: 24.671849, label: "530: Fallåker" },
-  { progressMin: -1.8, userLat: 60.223356, userLon: 24.689578, label: "530: Jorvi" },
-  { progressMin: -1.3, userLat: 60.22459,  userLon: 24.70664,  label: "530: Petas" },
-  { progressMin: -0.7, userLat: 60.22812,  userLon: 24.71094,  label: "530: Kolkeranta" },
-  { progressMin: -0.1, userLat: 60.232085, userLon: 24.716303, label: "530: Auroran koulu" },
-  { progressMin: 0.5,  userLat: 60.23562,  userLon: 24.72505,  label: "530: Vilniemi" },
-  { progressMin: 1.1,  userLat: 60.24064,  userLon: 24.74186,  label: "530: Lähderannanristi" },
-  { progressMin: 1.6,  userLat: 60.24387,  userLon: 24.7488,   label: "530: Kuttulammentie" },
-  { progressMin: 2.2,  userLat: 60.250577, userLon: 24.764382, label: "530: Huvilamäki" },
-  { progressMin: 2.8,  userLat: 60.253682, userLon: 24.775001, label: "530: Jupperinympyrä" },
-  { progressMin: 3.4,  userLat: 60.25474,  userLon: 24.78064,  label: "530: Linnaistentie" },
-  { progressMin: 3.9,  userLat: 60.25537,  userLon: 24.80147,  label: "530: Terhotie" },
-  { progressMin: 4.5,  userLat: 60.255369, userLon: 24.808008, label: "530: Pähkinärinteentie" },
-  { progressMin: 5.1,  userLat: 60.254197, userLon: 24.815768, label: "530: Koivuvaarankuja" },
-  { progressMin: 5.7,  userLat: 60.253851, userLon: 24.822685, label: "530: Köysikuja" },
-  { progressMin: 6.3,  userLat: 60.25561,  userLon: 24.82723,  label: "530: Vapaalanpolku" },
-  { progressMin: 6.8,  userLat: 60.258998, userLon: 24.836402, label: "530: Lastutie" },
-  { progressMin: 7.4,  userLat: 60.25903,  userLon: 24.844529, label: "530: Raappavuorentie" },
-  { progressMin: 8.0,  userLat: 60.25907,  userLon: 24.852743, label: "530 arrives at Iskostie" },
+  ...buildTransitScenarios("530", [
+    { progressMin: -3.0, userLat: 60.21878,  userLon: 24.66194,  name: "Ikea Espoo" },
+    { progressMin: -2.4, userLat: 60.22162,  userLon: 24.671849, name: "Fallåker" },
+    { progressMin: -1.8, userLat: 60.223356, userLon: 24.689578, name: "Jorvi" },
+    { progressMin: -1.3, userLat: 60.22459,  userLon: 24.70664,  name: "Petas" },
+    { progressMin: -0.7, userLat: 60.22812,  userLon: 24.71094,  name: "Kolkeranta" },
+    { progressMin: -0.1, userLat: 60.232085, userLon: 24.716303, name: "Auroran koulu" },
+    { progressMin: 0.5,  userLat: 60.23562,  userLon: 24.72505,  name: "Vilniemi" },
+    { progressMin: 1.1,  userLat: 60.24064,  userLon: 24.74186,  name: "Lähderannanristi" },
+    { progressMin: 1.6,  userLat: 60.24387,  userLon: 24.7488,   name: "Kuttulammentie" },
+    { progressMin: 2.2,  userLat: 60.250577, userLon: 24.764382, name: "Huvilamäki" },
+    { progressMin: 2.8,  userLat: 60.253682, userLon: 24.775001, name: "Jupperinympyrä" },
+    { progressMin: 3.4,  userLat: 60.25474,  userLon: 24.78064,  name: "Linnaistentie" },
+    { progressMin: 3.9,  userLat: 60.25537,  userLon: 24.80147,  name: "Terhotie" },
+    { progressMin: 4.5,  userLat: 60.255369, userLon: 24.808008, name: "Pähkinärinteentie" },
+    { progressMin: 5.1,  userLat: 60.254197, userLon: 24.815768, name: "Koivuvaarankuja" },
+    { progressMin: 5.7,  userLat: 60.253851, userLon: 24.822685, name: "Köysikuja" },
+    { progressMin: 6.3,  userLat: 60.25561,  userLon: 24.82723,  name: "Vapaalanpolku" },
+    { progressMin: 6.8,  userLat: 60.258998, userLon: 24.836402, name: "Lastutie" },
+    { progressMin: 7.4,  userLat: 60.25903,  userLon: 24.844529, name: "Raappavuorentie" },
+    { progressMin: 8.0,  userLat: 60.25907,  userLon: 24.852743, name: "Iskostie" },
+  ]),
 
   // Waiting at Iskostie for bus 560 (530 ended, 560 not yet started)
   { progressMin: 9, userLat: 60.25907, userLon: 24.852743, label: "Waiting for 560 at Iskostie" },
 
   // Bus 560: Iskostie → Silvola (5 stops)
-  { progressMin: 15, userLat: 60.25907,  userLon: 24.852743, label: "560: Iskostie" },
-  { progressMin: 17, userLat: 60.260899, userLon: 24.8567,   label: "560: Myyrmäen asema" },
-  { progressMin: 19, userLat: 60.263692, userLon: 24.859619, label: "560: Ojahaantie" },
-  { progressMin: 21, userLat: 60.263299, userLon: 24.869046, label: "560: Vaskivuori" },
-  { progressMin: 23, userLat: 60.265006, userLon: 24.883116, label: "560 arrives at Silvola" },
+  ...buildTransitScenarios("560", [
+    { progressMin: 15, userLat: 60.25907,  userLon: 24.852743, name: "Iskostie" },
+    { progressMin: 17, userLat: 60.260899, userLon: 24.8567,   name: "Myyrmäen asema" },
+    { progressMin: 19, userLat: 60.263692, userLon: 24.859619, name: "Ojahaantie" },
+    { progressMin: 21, userLat: 60.263299, userLon: 24.869046, name: "Vaskivuori" },
+    { progressMin: 23, userLat: 60.265006, userLon: 24.883116, name: "Silvola" },
+  ]),
 
   // Walk 3: Silvola → Vetotie 3
   { progressMin: 23.5, userLat: 60.265006, userLon: 24.883116, label: "Walking: Silvola" },
@@ -93,6 +164,18 @@ export const SCENARIO_INTERVAL_MS = (() => {
 })();
 let startTime: number | null = null;
 let pausedElapsed: number | null = null;
+const mockChangeSubscribers = new Set<() => void>();
+
+function notifyMockChanged() {
+  for (const callback of mockChangeSubscribers) callback();
+}
+
+export function subscribeMockChanges(callback: () => void): () => void {
+  mockChangeSubscribers.add(callback);
+  return () => {
+    mockChangeSubscribers.delete(callback);
+  };
+}
 
 function getElapsed(): number {
   if (startTime === null) startTime = Date.now();
@@ -107,12 +190,14 @@ function getScenarioIndex(): number {
 export function pauseMock(): void {
   if (pausedElapsed !== null) return;
   pausedElapsed = getElapsed();
+  notifyMockChanged();
 }
 
 export function resumeMock(): void {
   if (pausedElapsed === null) return;
   startTime = Date.now() - pausedElapsed;
   pausedElapsed = null;
+  notifyMockChanged();
 }
 
 export function isMockPaused(): boolean {
@@ -123,6 +208,7 @@ export function isMockPaused(): boolean {
 export function stepMockForward(): void {
   if (pausedElapsed === null) return;
   pausedElapsed += SCENARIO_INTERVAL_MS;
+  notifyMockChanged();
 }
 
 /** Step to previous scenario (only works when paused) */
@@ -133,6 +219,7 @@ export function stepMockBackward(): void {
   if (pausedElapsed < 0) {
     pausedElapsed += SCENARIOS.length * SCENARIO_INTERVAL_MS;
   }
+  notifyMockChanged();
 }
 
 function getCurrentScenario(): MockScenario {
@@ -151,8 +238,8 @@ export function getMockScenarioLabel(): string {
   return `[${idx + 1}/${SCENARIOS.length}] ${SCENARIOS[idx].label}`;
 }
 
-function timeOffset(baseMinutes: number, progressMin: number): string {
-  return new Date(Date.now() + (baseMinutes - progressMin) * 60_000).toISOString();
+function timeOffset(nowMs: number, baseMinutes: number, progressMin: number): string {
+  return new Date(nowMs + (baseMinutes - progressMin) * 60_000).toISOString();
 }
 
 /**
@@ -160,17 +247,18 @@ function timeOffset(baseMinutes: number, progressMin: number): string {
  * Times shift based on progressMin so the user appears at the right point in the journey.
  */
 export function generateMockConnections(): Connection[] {
+  const nowMs = Date.now();
   const { progressMin } = getCurrentScenario();
   console.log(`[Mock] Scenario: ${getMockScenarioLabel()}, progress: ${progressMin} min`);
 
-  const t = (min: number) => timeOffset(min, progressMin);
+  const t = (min: number) => timeOffset(nowMs, min, progressMin);
 
   /**
    * Build an "estimated" field simulating real-time data with a given delay.
    * delayMin: positive = late, negative = early.
    */
   const est = (baseMin: number, delayMin: number) => ({
-    time: timeOffset(baseMin + delayMin, progressMin),
+    time: timeOffset(nowMs, baseMin + delayMin, progressMin),
     delay: `PT${Math.round(delayMin * 60)}S`,
   });
 
@@ -385,6 +473,7 @@ export function getMockPreviousDeparture(
   if (!stopGtfsId || !routeShortName || !beforeTime) return { scheduledTime: null };
 
   const { progressMin } = getCurrentScenario();
+  const nowMs = Date.now();
   const previousDepartures: Record<string, { scheduledBaseMin: number; realtimeBaseMin?: number }> = {
     // Previous 530 after the 247 arrival at Ikea Espoo, so the transfer is possible.
     "HSL:2631217:530": { scheduledBaseMin: -10, realtimeBaseMin: -10 },
@@ -395,7 +484,7 @@ export function getMockPreviousDeparture(
   const departure = previousDepartures[`${stopGtfsId}:${routeShortName}`];
   if (!departure) return { scheduledTime: null };
 
-  const scheduledTime = timeOffset(departure.scheduledBaseMin, progressMin);
+  const scheduledTime = timeOffset(nowMs, departure.scheduledBaseMin, progressMin);
   if (new Date(scheduledTime).getTime() >= new Date(beforeTime).getTime()) {
     return { scheduledTime: null };
   }
@@ -404,7 +493,7 @@ export function getMockPreviousDeparture(
     scheduledTime,
     realtimeTime:
       departure.realtimeBaseMin !== undefined
-        ? timeOffset(departure.realtimeBaseMin, progressMin)
+        ? timeOffset(nowMs, departure.realtimeBaseMin, progressMin)
         : undefined,
   };
 }
