@@ -29,6 +29,13 @@ export interface ActiveLeg {
   matchDistance: number;
 }
 
+interface ActiveLegCandidate {
+  matchRank: number;
+  timeDistanceMs: number;
+  matchDistance: number;
+  activeLeg: ActiveLeg;
+}
+
 const MAX_DISTANCE_M = 500;
 const VEHICLE_MATCH_MAX_DISTANCE_M = 250;
 const VEHICLE_POSITION_MAX_AGE_MS = 90_000;
@@ -305,6 +312,20 @@ function getStableStopIndex(
   return resolvedIndex;
 }
 
+function isBetterActiveLegCandidate(
+  candidate: ActiveLegCandidate,
+  best: ActiveLegCandidate | null
+): boolean {
+  if (!best) return true;
+  if (candidate.matchRank !== best.matchRank) {
+    return candidate.matchRank < best.matchRank;
+  }
+  if (candidate.timeDistanceMs !== best.timeDistanceMs) {
+    return candidate.timeDistanceMs < best.timeDistanceMs;
+  }
+  return candidate.matchDistance < best.matchDistance;
+}
+
 /**
  * Detect if the user is currently on a transit leg.
  * Looks through connections that are currently in-progress and finds
@@ -317,8 +338,7 @@ export function detectActiveLeg(
 ): ActiveLeg | null {
   const now = new Date();
 
-  let bestMatch: ActiveLeg | null = null;
-  let bestDistance = Infinity;
+  let bestCandidate: ActiveLegCandidate | null = null;
 
   for (let ci = 0; ci < connections.length; ci++) {
     const conn = connections[ci];
@@ -385,25 +405,34 @@ export function detectActiveLeg(
       const statusIndex = getStableStopIndex(leg, stops, rawStatusIndex, now, userLat, userLon);
       const candidateDistance =
         vehicleMatchDistance ?? temporalSegmentMatch?.distance ?? closest.distance;
-      if (candidateDistance < bestDistance) {
-        bestDistance = candidateDistance;
+      const timeDistanceMs = getClosestStopTimeDistanceMs(stops, statusIndex, now);
+      const matchRank =
+        vehicleMatchDistance !== null ? 0 : temporalSegmentMatch !== null ? 1 : 2;
 
-        const stopsWithStatus: StopOnRoute[] = stops.map((s, i) => ({
-          ...s,
-          status: i < statusIndex ? "passed" : i === statusIndex ? "current" : "upcoming",
-        }));
+      const stopsWithStatus: StopOnRoute[] = stops.map((s, i) => ({
+        ...s,
+        status: i < statusIndex ? "passed" : i === statusIndex ? "current" : "upcoming",
+      }));
 
-        bestMatch = {
+      const candidate: ActiveLegCandidate = {
+        matchRank,
+        timeDistanceMs,
+        matchDistance: candidateDistance,
+        activeLeg: {
           leg,
           stops: stopsWithStatus,
           connectionIndex: ci,
-          matchDistance: closest.distance,
-        };
+          matchDistance: candidateDistance,
+        },
+      };
+
+      if (isBetterActiveLegCandidate(candidate, bestCandidate)) {
+        bestCandidate = candidate;
       }
     }
   }
 
-  return bestMatch;
+  return bestCandidate?.activeLeg ?? null;
 }
 
 /**
@@ -469,6 +498,32 @@ function buildActiveLegAtStop(
       status: index < stopIndex ? "passed" : index === stopIndex ? "current" : "upcoming",
     })),
   };
+}
+
+function getWaitingAnchorDistance(
+  conn: Connection,
+  legIndex: number,
+  userLat: number,
+  userLon: number
+): number {
+  const leg = conn.legs[legIndex];
+  let bestDistance = distanceMeters(userLat, userLon, leg.from.lat, leg.from.lon);
+
+  if (legIndex > 0) {
+    const previousLeg = conn.legs[legIndex - 1];
+    bestDistance = Math.min(
+      bestDistance,
+      distanceMeters(userLat, userLon, previousLeg.to.lat, previousLeg.to.lon)
+    );
+  }
+
+  return bestDistance;
+}
+
+function getWaitingMaxDistance(leg: Leg, legIndex: number, conn: Connection): number {
+  if (leg.mode === "RAIL" || leg.mode === "SUBWAY") return 600;
+  if (legIndex > 0 && conn.legs[legIndex - 1].mode === "WALK") return 350;
+  return WAITING_STOP_MAX_DISTANCE_M;
 }
 
 /**
@@ -559,6 +614,7 @@ export function detectJourneyState(
     legIndex: number;
     arrival: UpcomingArrival;
     distance: number;
+    effectiveStartMs: number;
   } | null = null;
 
   for (let ci = 0; ci < connections.length; ci++) {
@@ -588,34 +644,44 @@ export function detectJourneyState(
         }
       }
 
-      const dist = distanceMeters(userLat, userLon, leg.from.lat, leg.from.lon);
-      if (dist > WAITING_STOP_MAX_DISTANCE_M) continue;
+      const dist = getWaitingAnchorDistance(conn, li, userLat, userLon);
+      const maxDistance = getWaitingMaxDistance(leg, li, conn);
+      if (dist > maxDistance) continue;
 
-      if (!best || dist < best.distance) {
-        const delaySec = computeDelaySeconds(leg.start.scheduledTime, leg.start.estimated);
-        const effectiveStart = leg.start.estimated?.time
-          ? new Date(leg.start.estimated.time)
-          : legStart;
-        const minutesUntil = Math.round(
-          (effectiveStart.getTime() - now.getTime()) / 60000
-        );
-        best = {
-          connectionIndex: ci,
-          legIndex: li,
-          distance: dist,
-          arrival: {
-            routeShortName: leg.trip.routeShortName,
-            headsign: leg.trip.tripHeadsign,
-            mode: leg.mode,
-            stopName: leg.from.stop.name,
-            stopCode: leg.from.stop.code,
-            stopGtfsId: leg.from.stop.gtfsId,
-            minutesUntil,
-            scheduledTime: leg.start.scheduledTime,
-            realtimeTime: leg.start.estimated?.time,
-            delaySeconds: delaySec ?? undefined,
-          },
-        };
+      const delaySec = computeDelaySeconds(leg.start.scheduledTime, leg.start.estimated);
+      const effectiveStart = leg.start.estimated?.time
+        ? new Date(leg.start.estimated.time)
+        : legStart;
+      const minutesUntil = Math.round(
+        (effectiveStart.getTime() - now.getTime()) / 60000
+      );
+
+      const candidate = {
+        connectionIndex: ci,
+        legIndex: li,
+        distance: dist,
+        effectiveStartMs: effectiveStart.getTime(),
+        arrival: {
+          routeShortName: leg.trip.routeShortName,
+          headsign: leg.trip.tripHeadsign,
+          mode: leg.mode,
+          stopName: leg.from.stop.name,
+          stopCode: leg.from.stop.code,
+          stopGtfsId: leg.from.stop.gtfsId,
+          minutesUntil,
+          scheduledTime: leg.start.scheduledTime,
+          realtimeTime: leg.start.estimated?.time,
+          delaySeconds: delaySec ?? undefined,
+        },
+      };
+
+      if (
+        !best ||
+        candidate.effectiveStartMs < best.effectiveStartMs ||
+        (candidate.effectiveStartMs === best.effectiveStartMs &&
+          candidate.distance < best.distance)
+      ) {
+        best = candidate;
       }
     }
   }
