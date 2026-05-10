@@ -78,8 +78,27 @@ function resolveStopHighlight(
   const detectedTimeMs = getStopReferenceTimeMs(detectedStop);
   const isBeforeDetectedStop =
     detectedTimeMs === null || nowMs < detectedTimeMs;
+  const nextIndex = detectedIndex + 1;
+  const nextStop = nextIndex < stops.length ? stops[nextIndex] : null;
+  const nextDistance = nextStop ? getStopDistance(nextStop, userPosition) : null;
+  const nextTimeMs = nextStop ? getStopReferenceTimeMs(nextStop) : null;
+  const isBeforeNextStop = nextTimeMs === null || nowMs < nextTimeMs;
+  const nextStopIsCloser =
+    nextDistance !== null && nextDistance + 5 < detectedDistance;
 
   if (detectedIndex > 0 && isBeforeDetectedStop) {
+    if (nextStopIsCloser) {
+      if (
+        nextDistance !== null &&
+        isBeforeNextStop &&
+        nextDistance <= APPROACHING_STOP_DISTANCE_M
+      ) {
+        return { index: nextIndex, mode: "approaching" };
+      }
+
+      return { index: detectedIndex, mode: "static" };
+    }
+
     if (detectedDistance <= AT_STOP_DISTANCE_M) {
       return { index: detectedIndex, mode: "static" };
     }
@@ -91,18 +110,16 @@ function resolveStopHighlight(
     return { index: detectedIndex - 1, mode: "static" };
   }
 
-  const nextIndex = detectedIndex + 1;
   if (nextIndex < stops.length) {
-    const nextStop = stops[nextIndex];
-    const nextDistance = getStopDistance(nextStop, userPosition);
-    const nextTimeMs = getStopReferenceTimeMs(nextStop);
-    const isBeforeNextStop = nextTimeMs === null || nowMs < nextTimeMs;
-
-    if (nextDistance <= AT_STOP_DISTANCE_M) {
+    if (nextDistance !== null && nextDistance <= AT_STOP_DISTANCE_M) {
       return { index: nextIndex, mode: "static" };
     }
 
-    if (isBeforeNextStop && nextDistance <= APPROACHING_STOP_DISTANCE_M) {
+    if (
+      nextDistance !== null &&
+      isBeforeNextStop &&
+      nextDistance <= APPROACHING_STOP_DISTANCE_M
+    ) {
       return { index: nextIndex, mode: "approaching" };
     }
   }
