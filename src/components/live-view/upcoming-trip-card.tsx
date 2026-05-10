@@ -46,6 +46,20 @@ export function UpcomingTripCard({
           60_000
       )
     : null;
+  let headerDelayMin = startDelayMin;
+  if (headerDelayMin === null || headerDelayMin === 0) {
+    headerDelayMin = null;
+    for (const stop of stops) {
+      const stopDelayMin =
+        stop.delaySeconds !== undefined
+          ? Math.round(stop.delaySeconds / 60)
+          : null;
+      if (stopDelayMin !== null && stopDelayMin !== 0) {
+        headerDelayMin = stopDelayMin;
+        break;
+      }
+    }
+  }
 
   const prevDep = usePreviousDeparture(
     showPreviousDeparture ? leg.from.stop?.gtfsId : undefined,
@@ -63,6 +77,12 @@ export function UpcomingTripCard({
   return (
     <Card className="w-full border-blue-400 border-2">
       <CardContent className="p-4">
+        {canCatchPreviousDeparture && (
+          <div className="mb-3 w-fit rounded-md border border-green-300 bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-800 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200">
+            Edellinen lähtö: {formatTime(prevTime)}
+          </div>
+        )}
+
         <div className="flex items-center gap-2 mb-2">
           <span>{modeIcon(leg.mode)}</span>
           {shortName && (
@@ -76,17 +96,16 @@ export function UpcomingTripCard({
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">
             {formatTime(leg.start.scheduledTime)}–{formatTime(leg.end.scheduledTime)}
           </span>
-          {startDelayMin !== null && startDelayMin >= 1 && (
-            <span className="ml-2 text-xs text-red-600 font-medium">+{startDelayMin} min myöhässä</span>
-          )}
-          {startDelayMin !== null && startDelayMin <= -1 && (
-            <span className="ml-2 text-xs text-amber-600 font-medium">{startDelayMin} min edellä</span>
-          )}
         </div>
 
-        {canCatchPreviousDeparture && (
-          <div className="mb-3 w-fit rounded-md border border-green-300 bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-800 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200">
-            Edellinen lähtö: {formatTime(prevTime)}
+        {headerDelayMin !== null && headerDelayMin >= 1 && (
+          <div className="mb-2 text-right text-xs text-red-600 font-medium">
+            {headerDelayMin} min myöhässä
+          </div>
+        )}
+        {headerDelayMin !== null && headerDelayMin <= -1 && (
+          <div className="mb-2 text-right text-xs text-green-700 font-medium">
+            {Math.abs(headerDelayMin)} min etuajassa
           </div>
         )}
 
@@ -116,7 +135,7 @@ export function UpcomingTripCard({
                         delayMin !== null && delayMin >= 1
                           ? "text-red-600 font-medium"
                           : delayMin !== null && delayMin <= -1
-                          ? "text-amber-600 font-medium"
+                          ? "text-green-700 font-medium"
                           : "text-muted-foreground"
                       }
                     >

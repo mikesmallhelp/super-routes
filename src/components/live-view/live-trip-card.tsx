@@ -33,7 +33,7 @@ function ArrivalMessageCard({ hasRemainingWalk }: { hasRemainingWalk: boolean })
   );
 }
 
-export function LiveTripCard({ trip, onRemove, isExpanded, onJourneyStateChange }: LiveTripCardProps) {
+export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTripCardProps) {
   const { connections, pastConnections, isLoading, isValidating, error } = useLiveRoutes(trip);
   const hasIncluded = trip.selectedVehicles.length > 0;
   const hasExcluded = (trip.excludedVehicles ?? []).length > 0;
@@ -80,7 +80,6 @@ export function LiveTripCard({ trip, onRemove, isExpanded, onJourneyStateChange 
       }
     }
 
-    const pastLegs = legs.slice(0, activeIdx);
     const futureBefore =
       upcomingIdx !== null ? legs.slice(activeIdx + 1, upcomingIdx) : legs.slice(activeIdx + 1);
     const upcomingLeg = upcomingIdx !== null && upcomingIdx !== activeIdx ? legs[upcomingIdx] : null;
@@ -92,7 +91,6 @@ export function LiveTripCard({ trip, onRemove, isExpanded, onJourneyStateChange 
         : undefined;
 
     return {
-      pastLegs,
       futureBefore,
       upcomingLeg,
       waitingLeg,
@@ -104,17 +102,10 @@ export function LiveTripCard({ trip, onRemove, isExpanded, onJourneyStateChange 
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div>
         <h3 className="font-semibold text-sm">
           {trip.originLabel} → {trip.destinationLabel}
         </h3>
-        <button
-          onClick={() => onRemove(trip.id)}
-          className="text-muted-foreground hover:text-destructive text-lg leading-none px-1"
-          aria-label="Poista matka"
-        >
-          ×
-        </button>
       </div>
       {hasIncluded && (
         <div className="flex flex-wrap items-center gap-1">
@@ -156,10 +147,6 @@ export function LiveTripCard({ trip, onRemove, isExpanded, onJourneyStateChange 
 
       {isExpanded && journeyState && activeConnection && layout ? (
         <div className="space-y-2">
-          {layout.pastLegs.map((leg, i) => (
-            <LegCard key={`past-${i}`} leg={leg} variant="past" />
-          ))}
-
           {journeyState.mode === "on-vehicle" && journeyState.activeLeg && (
             <StopList activeLeg={journeyState.activeLeg} userPosition={userPos} />
           )}

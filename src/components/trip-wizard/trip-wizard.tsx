@@ -129,6 +129,10 @@ export function TripWizard() {
     setStep("done");
   }, [originAddr, destAddr, includedVehicles, excludedVehicles, filterMode, addTrip]);
 
+  const handleCancel = useCallback(() => {
+    setStep("done");
+  }, []);
+
   const handleNewTrip = useCallback(() => {
     setStep("address");
     setOriginAddr(null);
@@ -214,6 +218,7 @@ export function TripWizard() {
             onCycleVehicle={handleCycleVehicle}
             onSetFilterMode={setFilterMode}
             onFinish={handleTripDone}
+            onCancel={handleCancel}
           />
 
           {filteredConnections.length === 0 ? (

@@ -14,6 +14,7 @@ interface VehicleFilterProps {
   onCycleVehicle: (vehicle: string) => void;
   onSetFilterMode: (mode: VehicleFilterMode) => void;
   onFinish: () => void;
+  onCancel: () => void;
 }
 
 function getVehicleState(
@@ -34,6 +35,7 @@ export function VehicleFilter({
   onCycleVehicle,
   onSetFilterMode,
   onFinish,
+  onCancel,
 }: VehicleFilterProps) {
   const hasIncluded = includedVehicles.length > 0;
   const hasExcluded = excludedVehicles.length > 0;
@@ -133,9 +135,14 @@ export function VehicleFilter({
         </div>
       )}
 
-      <Button onClick={onFinish} className="w-full">
-        Matka valmis
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={onCancel} variant="outline" className="flex-1">
+          Keskeytä
+        </Button>
+        <Button onClick={onFinish} className="flex-1">
+          Matka valmis
+        </Button>
+      </div>
     </div>
   );
 }

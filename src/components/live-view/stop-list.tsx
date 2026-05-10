@@ -78,8 +78,27 @@ function resolveStopHighlight(
   const detectedTimeMs = getStopReferenceTimeMs(detectedStop);
   const isBeforeDetectedStop =
     detectedTimeMs === null || nowMs < detectedTimeMs;
+  const nextIndex = detectedIndex + 1;
+  const nextStop = nextIndex < stops.length ? stops[nextIndex] : null;
+  const nextDistance = nextStop ? getStopDistance(nextStop, userPosition) : null;
+  const nextTimeMs = nextStop ? getStopReferenceTimeMs(nextStop) : null;
+  const isBeforeNextStop = nextTimeMs === null || nowMs < nextTimeMs;
+  const nextStopIsCloser =
+    nextDistance !== null && nextDistance + 5 < detectedDistance;
 
   if (detectedIndex > 0 && isBeforeDetectedStop) {
+    if (nextStopIsCloser) {
+      if (
+        nextDistance !== null &&
+        isBeforeNextStop &&
+        nextDistance <= APPROACHING_STOP_DISTANCE_M
+      ) {
+        return { index: nextIndex, mode: "approaching" };
+      }
+
+      return { index: detectedIndex, mode: "static" };
+    }
+
     if (detectedDistance <= AT_STOP_DISTANCE_M) {
       return { index: detectedIndex, mode: "static" };
     }
@@ -91,18 +110,16 @@ function resolveStopHighlight(
     return { index: detectedIndex - 1, mode: "static" };
   }
 
-  const nextIndex = detectedIndex + 1;
   if (nextIndex < stops.length) {
-    const nextStop = stops[nextIndex];
-    const nextDistance = getStopDistance(nextStop, userPosition);
-    const nextTimeMs = getStopReferenceTimeMs(nextStop);
-    const isBeforeNextStop = nextTimeMs === null || nowMs < nextTimeMs;
-
-    if (nextDistance <= AT_STOP_DISTANCE_M) {
+    if (nextDistance !== null && nextDistance <= AT_STOP_DISTANCE_M) {
       return { index: nextIndex, mode: "static" };
     }
 
-    if (isBeforeNextStop && nextDistance <= APPROACHING_STOP_DISTANCE_M) {
+    if (
+      nextDistance !== null &&
+      isBeforeNextStop &&
+      nextDistance <= APPROACHING_STOP_DISTANCE_M
+    ) {
       return { index: nextIndex, mode: "approaching" };
     }
   }
@@ -207,10 +224,25 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
 
   const entries = buildVisibleEntries(stops, highlight.index);
   const currentStop = stops[highlight.index];
-  const delayMin =
+  const currentDelayMin =
     currentStop?.delaySeconds !== undefined
       ? Math.round(currentStop.delaySeconds / 60)
       : null;
+  let headerDelayMin = currentDelayMin;
+  if (headerDelayMin === null || headerDelayMin === 0) {
+    headerDelayMin = null;
+    for (let i = highlight.index + 1; i < stops.length; i++) {
+      const stop = stops[i];
+      const nextDelayMin =
+        stop?.delaySeconds !== undefined
+          ? Math.round(stop.delaySeconds / 60)
+          : null;
+      if (nextDelayMin !== null && nextDelayMin !== 0) {
+        headerDelayMin = nextDelayMin;
+        break;
+      }
+    }
+  }
 
   return (
     <Card className="w-full border-green-400 border-2">
@@ -231,11 +263,11 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
           </div>
           <div className="shrink-0 text-right text-xs font-medium text-green-700">
             <div>Matkalla</div>
-            {delayMin !== null && delayMin >= 1 && (
-              <div className="text-red-600">+{delayMin} min myöhässä</div>
+            {headerDelayMin !== null && headerDelayMin >= 1 && (
+              <div className="text-red-600">{headerDelayMin} min myöhässä</div>
             )}
-            {delayMin !== null && delayMin <= -1 && (
-              <div className="text-amber-600">{delayMin} min edellä</div>
+            {headerDelayMin !== null && headerDelayMin <= -1 && (
+              <div className="text-green-700">{Math.abs(headerDelayMin)} min etuajassa</div>
             )}
           </div>
         </div>
@@ -283,7 +315,7 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
                   <div
                     className={`w-3 h-3 rounded-full border-2 shrink-0 z-10 ${
                       isApproaching
-                        ? "animate-pulse bg-green-400 border-green-500 ring-2 ring-green-200"
+                        ? "stop-approaching-dot"
                         : visualStatus === "current"
                         ? "bg-green-500 border-green-600 ring-2 ring-green-300"
                         : visualStatus === "passed"
@@ -303,7 +335,7 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
                   </div>
 
                   <div className="text-xs shrink-0 tabular-nums text-right">
-                    <div className={stop.delaySeconds !== undefined && stop.delaySeconds > 0 ? "text-red-600 font-medium" : stop.delaySeconds !== undefined && stop.delaySeconds < 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>
+                    <div className={stop.delaySeconds !== undefined && stop.delaySeconds > 0 ? "text-red-600 font-medium" : stop.delaySeconds !== undefined && stop.delaySeconds < 0 ? "text-green-700 font-medium" : "text-muted-foreground"}>
                       {stop.realtimeTime
                         ? formatTime(stop.realtimeTime)
                         : stop.scheduledTime && formatTime(stop.scheduledTime)}
