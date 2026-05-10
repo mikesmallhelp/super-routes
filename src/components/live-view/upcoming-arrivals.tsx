@@ -57,7 +57,7 @@ export function UpcomingArrivals({ arrivals }: UpcomingArrivalsProps) {
                     </span>
                     {delayMin !== null && delayMin >= 1 && (
                       <span className="text-xs text-red-600 font-medium shrink-0">
-                        +{delayMin} min myöhässä
+                        {delayMin} min myöhässä
                       </span>
                     )}
                     {delayMin !== null && delayMin <= -1 && (

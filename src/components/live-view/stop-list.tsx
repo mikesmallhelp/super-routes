@@ -264,7 +264,7 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
           <div className="shrink-0 text-right text-xs font-medium text-green-700">
             <div>Matkalla</div>
             {headerDelayMin !== null && headerDelayMin >= 1 && (
-              <div className="text-red-600">+{headerDelayMin} min myöhässä</div>
+              <div className="text-red-600">{headerDelayMin} min myöhässä</div>
             )}
             {headerDelayMin !== null && headerDelayMin <= -1 && (
               <div className="text-green-700">{Math.abs(headerDelayMin)} min etuajassa</div>

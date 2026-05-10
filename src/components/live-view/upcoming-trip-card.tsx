@@ -91,7 +91,7 @@ export function UpcomingTripCard({
             {formatTime(leg.start.scheduledTime)}–{formatTime(leg.end.scheduledTime)}
           </span>
           {headerDelayMin !== null && headerDelayMin >= 1 && (
-            <span className="ml-2 text-xs text-red-600 font-medium">+{headerDelayMin} min myöhässä</span>
+            <span className="ml-2 text-xs text-red-600 font-medium">{headerDelayMin} min myöhässä</span>
           )}
           {headerDelayMin !== null && headerDelayMin <= -1 && (
             <span className="ml-2 text-xs text-green-700 font-medium">{Math.abs(headerDelayMin)} min etuajassa</span>
