@@ -80,7 +80,6 @@ export function LiveTripCard({ trip, onRemove, isExpanded, onJourneyStateChange 
       }
     }
 
-    const pastLegs = legs.slice(0, activeIdx);
     const futureBefore =
       upcomingIdx !== null ? legs.slice(activeIdx + 1, upcomingIdx) : legs.slice(activeIdx + 1);
     const upcomingLeg = upcomingIdx !== null && upcomingIdx !== activeIdx ? legs[upcomingIdx] : null;
@@ -92,7 +91,6 @@ export function LiveTripCard({ trip, onRemove, isExpanded, onJourneyStateChange 
         : undefined;
 
     return {
-      pastLegs,
       futureBefore,
       upcomingLeg,
       waitingLeg,
@@ -156,10 +154,6 @@ export function LiveTripCard({ trip, onRemove, isExpanded, onJourneyStateChange 
 
       {isExpanded && journeyState && activeConnection && layout ? (
         <div className="space-y-2">
-          {layout.pastLegs.map((leg, i) => (
-            <LegCard key={`past-${i}`} leg={leg} variant="past" />
-          ))}
-
           {journeyState.mode === "on-vehicle" && journeyState.activeLeg && (
             <StopList activeLeg={journeyState.activeLeg} userPosition={userPos} />
           )}
