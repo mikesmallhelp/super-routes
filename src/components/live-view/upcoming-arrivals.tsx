@@ -61,8 +61,8 @@ export function UpcomingArrivals({ arrivals }: UpcomingArrivalsProps) {
                       </span>
                     )}
                     {delayMin !== null && delayMin <= -1 && (
-                      <span className="text-xs text-amber-600 font-medium shrink-0">
-                        {delayMin} min edellä
+                      <span className="text-xs text-green-700 font-medium shrink-0">
+                        {Math.abs(delayMin)} min etuajassa
                       </span>
                     )}
                     <span className="font-bold tabular-nums shrink-0">

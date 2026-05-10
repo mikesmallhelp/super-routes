@@ -252,7 +252,7 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
               <div className="text-red-600">+{delayMin} min myöhässä</div>
             )}
             {delayMin !== null && delayMin <= -1 && (
-              <div className="text-amber-600">{delayMin} min edellä</div>
+              <div className="text-green-700">{Math.abs(delayMin)} min etuajassa</div>
             )}
           </div>
         </div>
@@ -320,7 +320,7 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
                   </div>
 
                   <div className="text-xs shrink-0 tabular-nums text-right">
-                    <div className={stop.delaySeconds !== undefined && stop.delaySeconds > 0 ? "text-red-600 font-medium" : stop.delaySeconds !== undefined && stop.delaySeconds < 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>
+                    <div className={stop.delaySeconds !== undefined && stop.delaySeconds > 0 ? "text-red-600 font-medium" : stop.delaySeconds !== undefined && stop.delaySeconds < 0 ? "text-green-700 font-medium" : "text-muted-foreground"}>
                       {stop.realtimeTime
                         ? formatTime(stop.realtimeTime)
                         : stop.scheduledTime && formatTime(stop.scheduledTime)}

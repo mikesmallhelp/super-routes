@@ -80,7 +80,7 @@ export function UpcomingTripCard({
             <span className="ml-2 text-xs text-red-600 font-medium">+{startDelayMin} min myöhässä</span>
           )}
           {startDelayMin !== null && startDelayMin <= -1 && (
-            <span className="ml-2 text-xs text-amber-600 font-medium">{startDelayMin} min edellä</span>
+            <span className="ml-2 text-xs text-green-700 font-medium">{Math.abs(startDelayMin)} min etuajassa</span>
           )}
         </div>
 
@@ -116,7 +116,7 @@ export function UpcomingTripCard({
                         delayMin !== null && delayMin >= 1
                           ? "text-red-600 font-medium"
                           : delayMin !== null && delayMin <= -1
-                          ? "text-amber-600 font-medium"
+                          ? "text-green-700 font-medium"
                           : "text-muted-foreground"
                       }
                     >
