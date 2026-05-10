@@ -300,7 +300,7 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
                   <div
                     className={`w-3 h-3 rounded-full border-2 shrink-0 z-10 ${
                       isApproaching
-                        ? "animate-pulse bg-green-400 border-green-500 ring-2 ring-green-200"
+                        ? "stop-approaching-dot"
                         : visualStatus === "current"
                         ? "bg-green-500 border-green-600 ring-2 ring-green-300"
                         : visualStatus === "passed"
