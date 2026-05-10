@@ -224,10 +224,25 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
 
   const entries = buildVisibleEntries(stops, highlight.index);
   const currentStop = stops[highlight.index];
-  const delayMin =
+  const currentDelayMin =
     currentStop?.delaySeconds !== undefined
       ? Math.round(currentStop.delaySeconds / 60)
       : null;
+  let headerDelayMin = currentDelayMin;
+  if (headerDelayMin === null || headerDelayMin === 0) {
+    headerDelayMin = null;
+    for (let i = highlight.index + 1; i < stops.length; i++) {
+      const stop = stops[i];
+      const nextDelayMin =
+        stop?.delaySeconds !== undefined
+          ? Math.round(stop.delaySeconds / 60)
+          : null;
+      if (nextDelayMin !== null && nextDelayMin !== 0) {
+        headerDelayMin = nextDelayMin;
+        break;
+      }
+    }
+  }
 
   return (
     <Card className="w-full border-green-400 border-2">
@@ -248,11 +263,11 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
           </div>
           <div className="shrink-0 text-right text-xs font-medium text-green-700">
             <div>Matkalla</div>
-            {delayMin !== null && delayMin >= 1 && (
-              <div className="text-red-600">+{delayMin} min myöhässä</div>
+            {headerDelayMin !== null && headerDelayMin >= 1 && (
+              <div className="text-red-600">+{headerDelayMin} min myöhässä</div>
             )}
-            {delayMin !== null && delayMin <= -1 && (
-              <div className="text-green-700">{Math.abs(delayMin)} min etuajassa</div>
+            {headerDelayMin !== null && headerDelayMin <= -1 && (
+              <div className="text-green-700">{Math.abs(headerDelayMin)} min etuajassa</div>
             )}
           </div>
         </div>
