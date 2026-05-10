@@ -46,6 +46,20 @@ export function UpcomingTripCard({
           60_000
       )
     : null;
+  let headerDelayMin = startDelayMin;
+  if (headerDelayMin === null || headerDelayMin === 0) {
+    headerDelayMin = null;
+    for (const stop of stops) {
+      const stopDelayMin =
+        stop.delaySeconds !== undefined
+          ? Math.round(stop.delaySeconds / 60)
+          : null;
+      if (stopDelayMin !== null && stopDelayMin !== 0) {
+        headerDelayMin = stopDelayMin;
+        break;
+      }
+    }
+  }
 
   const prevDep = usePreviousDeparture(
     showPreviousDeparture ? leg.from.stop?.gtfsId : undefined,
@@ -76,11 +90,11 @@ export function UpcomingTripCard({
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">
             {formatTime(leg.start.scheduledTime)}–{formatTime(leg.end.scheduledTime)}
           </span>
-          {startDelayMin !== null && startDelayMin >= 1 && (
-            <span className="ml-2 text-xs text-red-600 font-medium">+{startDelayMin} min myöhässä</span>
+          {headerDelayMin !== null && headerDelayMin >= 1 && (
+            <span className="ml-2 text-xs text-red-600 font-medium">+{headerDelayMin} min myöhässä</span>
           )}
-          {startDelayMin !== null && startDelayMin <= -1 && (
-            <span className="ml-2 text-xs text-green-700 font-medium">{Math.abs(startDelayMin)} min etuajassa</span>
+          {headerDelayMin !== null && headerDelayMin <= -1 && (
+            <span className="ml-2 text-xs text-green-700 font-medium">{Math.abs(headerDelayMin)} min etuajassa</span>
           )}
         </div>
 
