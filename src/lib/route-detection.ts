@@ -41,12 +41,15 @@ const VEHICLE_MATCH_MAX_DISTANCE_M = 250;
 const VEHICLE_POSITION_MAX_AGE_MS = 90_000;
 const STOP_TIME_MATCH_TOLERANCE_MS = 6 * 60 * 1000;
 const SEGMENT_MATCH_MAX_DISTANCE_M = 400;
+const RAIL_SEGMENT_MATCH_MAX_DISTANCE_M = 1_000;
 const STOP_PROXIMITY_OVERRIDE_M = 150;
 const WAITING_STOP_MAX_DISTANCE_M = 150;
 const STOP_SWITCH_MARGIN_M = 40;
 const STOP_STATE_MAX_AGE_MS = 30 * 60 * 1000;
+const ACTIVE_LEG_GRACE_MS = 2 * 60 * 1000;
 
 const lastDetectedStopIndex = new Map<string, { index: number; updatedAt: number }>();
+const lastActiveLegMatch = new Map<string, { updatedAt: number }>();
 
 export interface StopWithTimes {
   name: string;
@@ -211,6 +214,7 @@ function distanceToSegmentMeters(
 }
 
 function getTemporalSegmentMatch(
+  leg: Leg,
   stops: StopWithTimes[],
   now: Date,
   userLat: number,
@@ -232,7 +236,11 @@ function getTemporalSegmentMatch(
       stops[i + 1].lat,
       stops[i + 1].lon
     );
-    if (distance > SEGMENT_MATCH_MAX_DISTANCE_M) return null;
+    const maxDistance =
+      leg.mode === "RAIL" || leg.mode === "SUBWAY"
+        ? RAIL_SEGMENT_MATCH_MAX_DISTANCE_M
+        : SEGMENT_MATCH_MAX_DISTANCE_M;
+    if (distance > maxDistance) return null;
 
     const midpointMs = startMs + (endMs - startMs) / 2;
     return {
@@ -253,6 +261,19 @@ function getLegDetectionKey(leg: Leg): string | null {
     leg.from.stop?.code ?? leg.from.name,
     leg.to.stop?.code ?? leg.to.name,
   ].join("|");
+}
+
+function getTimeBasedStopIndex(stops: StopWithTimes[], now: Date): number {
+  const nowMs = now.getTime();
+  let index = 0;
+  for (let i = 0; i < stops.length; i++) {
+    if (getStopTimeMs(stops[i]) <= nowMs) {
+      index = i;
+    } else {
+      break;
+    }
+  }
+  return index;
 }
 
 function getStopDistanceMeters(
@@ -367,7 +388,7 @@ export function detectActiveLeg(
       const closest = findClosestStop(stops, userLat, userLon);
       const rawTemporalSegmentMatch =
         vehicleMatchDistance === null
-          ? getTemporalSegmentMatch(stops, now, userLat, userLon)
+          ? getTemporalSegmentMatch(leg, stops, now, userLat, userLon)
           : null;
       const temporalSegmentMatch =
         closest.distance > STOP_PROXIMITY_OVERRIDE_M ? rawTemporalSegmentMatch : null;
@@ -432,7 +453,59 @@ export function detectActiveLeg(
     }
   }
 
-  return bestCandidate?.activeLeg ?? null;
+  if (bestCandidate) {
+    const key = getLegDetectionKey(bestCandidate.activeLeg.leg);
+    if (key) {
+      lastActiveLegMatch.set(key, { updatedAt: now.getTime() });
+    }
+    return bestCandidate.activeLeg;
+  }
+
+  let stickyFallback: ActiveLeg | null = null;
+  let stickyUpdatedAt = 0;
+
+  for (let ci = 0; ci < connections.length; ci++) {
+    const conn = connections[ci];
+    for (const leg of conn.legs) {
+      if (leg.mode === "WALK") continue;
+      const key = getLegDetectionKey(leg);
+      if (!key) continue;
+
+      const lastMatch = lastActiveLegMatch.get(key);
+      if (!lastMatch) continue;
+      if (now.getTime() - lastMatch.updatedAt > ACTIVE_LEG_GRACE_MS) continue;
+
+      const legStart = leg.start.estimated?.time
+        ? new Date(leg.start.estimated.time)
+        : new Date(leg.start.scheduledTime);
+      const legEnd = leg.end.estimated?.time
+        ? new Date(leg.end.estimated.time)
+        : new Date(leg.end.scheduledTime);
+
+      if (now < legStart || now.getTime() > legEnd.getTime() + ACTIVE_LEG_GRACE_MS) continue;
+
+      const stops = buildStopList(leg);
+      if (stops.length === 0) continue;
+
+      const statusIndex = getTimeBasedStopIndex(stops, now);
+      const fallback: ActiveLeg = {
+        leg,
+        connectionIndex: ci,
+        matchDistance: MAX_DISTANCE_M,
+        stops: stops.map((stop, index) => ({
+          ...stop,
+          status: index < statusIndex ? "passed" : index === statusIndex ? "current" : "upcoming",
+        })),
+      };
+
+      if (lastMatch.updatedAt > stickyUpdatedAt) {
+        stickyFallback = fallback;
+        stickyUpdatedAt = lastMatch.updatedAt;
+      }
+    }
+  }
+
+  return stickyFallback;
 }
 
 /**
