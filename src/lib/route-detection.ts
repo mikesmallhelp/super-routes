@@ -45,8 +45,10 @@ const STOP_PROXIMITY_OVERRIDE_M = 150;
 const WAITING_STOP_MAX_DISTANCE_M = 150;
 const STOP_SWITCH_MARGIN_M = 40;
 const STOP_STATE_MAX_AGE_MS = 30 * 60 * 1000;
+const ACTIVE_LEG_GRACE_MS = 90_000;
 
 const lastDetectedStopIndex = new Map<string, { index: number; updatedAt: number }>();
+const lastActiveLegMatch = new Map<string, { updatedAt: number }>();
 
 export interface StopWithTimes {
   name: string;
@@ -255,6 +257,19 @@ function getLegDetectionKey(leg: Leg): string | null {
   ].join("|");
 }
 
+function getTimeBasedStopIndex(stops: StopWithTimes[], now: Date): number {
+  const nowMs = now.getTime();
+  let index = 0;
+  for (let i = 0; i < stops.length; i++) {
+    if (getStopTimeMs(stops[i]) <= nowMs) {
+      index = i;
+    } else {
+      break;
+    }
+  }
+  return index;
+}
+
 function getStopDistanceMeters(
   stops: StopWithTimes[],
   stopIndex: number,
@@ -432,7 +447,63 @@ export function detectActiveLeg(
     }
   }
 
-  return bestCandidate?.activeLeg ?? null;
+  if (bestCandidate) {
+    const key = getLegDetectionKey(bestCandidate.activeLeg.leg);
+    if (key) {
+      lastActiveLegMatch.set(key, { updatedAt: now.getTime() });
+    }
+    return bestCandidate.activeLeg;
+  }
+
+  let fallbackActiveLeg: ActiveLeg | null = null;
+  let fallbackUpdatedAt = 0;
+
+  for (let ci = 0; ci < connections.length; ci++) {
+    const conn = connections[ci];
+    for (const leg of conn.legs) {
+      if (leg.mode === "WALK") continue;
+
+      const key = getLegDetectionKey(leg);
+      if (!key) continue;
+
+      const lastMatch = lastActiveLegMatch.get(key);
+      if (!lastMatch) continue;
+      if (now.getTime() - lastMatch.updatedAt > ACTIVE_LEG_GRACE_MS) continue;
+
+      const legStart = leg.start.estimated?.time
+        ? new Date(leg.start.estimated.time)
+        : new Date(leg.start.scheduledTime);
+      const legEnd = leg.end.estimated?.time
+        ? new Date(leg.end.estimated.time)
+        : new Date(leg.end.scheduledTime);
+      if (now < legStart || now > legEnd) continue;
+
+      const stops = buildStopList(leg);
+      if (stops.length === 0) continue;
+
+      const previousStopState = lastDetectedStopIndex.get(key);
+      const statusIndex = previousStopState
+        ? Math.min(previousStopState.index, stops.length - 1)
+        : getTimeBasedStopIndex(stops, now);
+
+      const candidate: ActiveLeg = {
+        leg,
+        connectionIndex: ci,
+        matchDistance: MAX_DISTANCE_M,
+        stops: stops.map((stop, index) => ({
+          ...stop,
+          status: index < statusIndex ? "passed" : index === statusIndex ? "current" : "upcoming",
+        })),
+      };
+
+      if (lastMatch.updatedAt > fallbackUpdatedAt) {
+        fallbackActiveLeg = candidate;
+        fallbackUpdatedAt = lastMatch.updatedAt;
+      }
+    }
+  }
+
+  return fallbackActiveLeg;
 }
 
 /**
