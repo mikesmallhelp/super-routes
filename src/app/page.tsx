@@ -6,6 +6,7 @@ import { TripWizard } from "@/components/trip-wizard/trip-wizard";
 import { LiveDashboard } from "@/components/live-view/live-dashboard";
 import { LoginScreen } from "@/components/auth/login-screen";
 import { UserMenu } from "@/components/auth/user-menu";
+import packageJson from "../../package.json";
 
 function AppContent() {
   const { isSetupDone, loading } = useTrips();
@@ -23,6 +24,9 @@ function AppContent() {
       ) : (
         <TripWizard />
       )}
+      <div className="mt-10 border-t pt-4 text-center text-xs text-muted-foreground">
+        Versio {packageJson.version}
+      </div>
     </main>
   );
 }
