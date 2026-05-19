@@ -154,7 +154,13 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
             <ArrivalMessageCard hasRemainingWalk={layout.hasRemainingWalk} />
           )}
           {journeyState.mode === "waiting" && journeyState.upcomingArrival && (
-            <UpcomingArrivals arrivals={[journeyState.upcomingArrival]} />
+            <UpcomingArrivals
+              arrivals={[journeyState.upcomingArrival]}
+              stopGtfsId={journeyState.upcomingArrival.stopGtfsId}
+              includeRoutes={trip.selectedVehicles}
+              excludeRoutes={trip.excludedVehicles ?? []}
+              headsign={layout.waitingLeg?.trip?.tripHeadsign ?? journeyState.upcomingArrival.headsign}
+            />
           )}
 
           {/* Walk or other legs between the active leg and the next transit */}

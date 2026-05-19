@@ -220,6 +220,39 @@ query PrevDeparture($stopId: String!, $date: String!) {
 }
 `;
 
+const STOP_DEPARTURES_QUERY = `
+query StopDepartures($stopId: String!, $date: String!) {
+  stop(id: $stopId) {
+    name
+    code
+    stoptimesForServiceDate(date: $date, omitNonPickups: true) {
+      pattern {
+        route { shortName mode }
+        headsign
+      }
+      stoptimes {
+        scheduledDeparture
+        realtimeDeparture
+        serviceDay
+        realtime
+      }
+    }
+  }
+}
+`;
+
+export interface StopDepartureInfo {
+  routeShortName: string;
+  mode: string;
+  headsign: string;
+  stopName: string;
+  stopCode: string;
+  minutesUntil: number;
+  scheduledTime: string;
+  realtimeTime?: string;
+  delaySeconds?: number;
+}
+
 /**
  * Fetch the scheduled departure time of the PREVIOUS vehicle of a given route
  * from a specific stop, relative to a target time.
@@ -280,6 +313,96 @@ export async function fetchPreviousDeparture(
     scheduledTime: new Date(best.schedMs).toISOString(),
     realtimeTime: best.realtMs != null ? new Date(best.realtMs).toISOString() : undefined,
   };
+}
+
+export async function fetchStopDepartures(
+  stopGtfsId: string,
+  afterTime: string,
+  includeRoutes: string[] = [],
+  excludeRoutes: string[] = [],
+  headsign?: string,
+  limit: number = 5
+): Promise<StopDepartureInfo[]> {
+  const after = new Date(afterTime);
+  const hdate = new Date(after.toLocaleString("en-US", { timeZone: "Europe/Helsinki" }));
+  const date = `${hdate.getFullYear()}${String(hdate.getMonth() + 1).padStart(2, "0")}${String(hdate.getDate()).padStart(2, "0")}`;
+
+  const res = await fetch(ROUTING_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "digitransit-subscription-key": API_KEY,
+    },
+    body: JSON.stringify({
+      query: STOP_DEPARTURES_QUERY,
+      variables: { stopId: stopGtfsId, date },
+    }),
+  });
+  const data = await res.json();
+  log("StopDepartures response", data);
+  if (data.errors) {
+    console.error("[Digitransit] StopDepartures errors:", data.errors);
+    return [];
+  }
+
+  const stop = data.data?.stop;
+  if (!stop) return [];
+
+  const includeSet = new Set(includeRoutes);
+  const excludeSet = new Set(excludeRoutes);
+  const afterMs = after.getTime();
+  type ST = {
+    scheduledDeparture: number;
+    realtimeDeparture?: number;
+    serviceDay: number;
+    realtime: boolean;
+  };
+
+  const departures: StopDepartureInfo[] = [];
+  for (const p of stop.stoptimesForServiceDate || []) {
+    const routeShortName = p.pattern?.route?.shortName;
+    const routeMode = p.pattern?.route?.mode;
+    const routeHeadsign = p.pattern?.headsign;
+    if (!routeShortName) continue;
+    if (excludeSet.has(routeShortName)) continue;
+    if (includeSet.size > 0 && !includeSet.has(routeShortName)) continue;
+    if (headsign && routeHeadsign && routeHeadsign !== headsign) continue;
+
+    for (const st of p.stoptimes as ST[]) {
+      const schedMs = (st.serviceDay + st.scheduledDeparture) * 1000;
+      const realtimeMs = st.realtime && st.realtimeDeparture != null
+        ? (st.serviceDay + st.realtimeDeparture) * 1000
+        : null;
+      const effectiveMs = realtimeMs ?? schedMs;
+      if (effectiveMs < afterMs) continue;
+
+      departures.push({
+        routeShortName,
+        mode: routeMode ?? "BUS",
+        headsign: routeHeadsign ?? "",
+        stopName: stop.name,
+        stopCode: stop.code,
+        minutesUntil: Math.round((effectiveMs - afterMs) / 60000),
+        scheduledTime: new Date(schedMs).toISOString(),
+        realtimeTime: realtimeMs != null ? new Date(realtimeMs).toISOString() : undefined,
+        delaySeconds: realtimeMs != null ? Math.round((realtimeMs - schedMs) / 1000) : undefined,
+      });
+    }
+  }
+
+  departures.sort((a, b) => {
+    const aMs = new Date(a.realtimeTime ?? a.scheduledTime).getTime();
+    const bMs = new Date(b.realtimeTime ?? b.scheduledTime).getTime();
+    return aMs - bMs;
+  });
+
+  const seen = new Set<string>();
+  return departures.filter((departure) => {
+    const key = `${departure.routeShortName}-${departure.headsign}-${departure.scheduledTime}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, limit);
 }
 
 export async function fetchRoutes(

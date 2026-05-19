@@ -1,8 +1,11 @@
 "use client";
 
 import type { UpcomingArrival } from "@/lib/route-detection";
+import type { StopDepartureInfo } from "@/lib/digitransit";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { useStopDepartures } from "@/hooks/use-stop-departures";
+import { useNow } from "@/hooks/use-now";
 
 function modeIcon(mode: string) {
   switch (mode) {
@@ -17,14 +20,51 @@ function modeIcon(mode: string) {
 
 interface UpcomingArrivalsProps {
   arrivals: UpcomingArrival[];
+  stopGtfsId?: string;
+  includeRoutes?: string[];
+  excludeRoutes?: string[];
+  headsign?: string;
 }
 
-export function UpcomingArrivals({ arrivals }: UpcomingArrivalsProps) {
-  if (arrivals.length === 0) return null;
+function mapStopDepartureToArrival(departure: StopDepartureInfo): UpcomingArrival {
+  return {
+    routeShortName: departure.routeShortName,
+    headsign: departure.headsign,
+    mode: departure.mode,
+    stopName: departure.stopName,
+    stopCode: departure.stopCode,
+    minutesUntil: departure.minutesUntil,
+    scheduledTime: departure.scheduledTime,
+    realtimeTime: departure.realtimeTime,
+    delaySeconds: departure.delaySeconds,
+  };
+}
+
+export function UpcomingArrivals({
+  arrivals,
+  stopGtfsId,
+  includeRoutes = [],
+  excludeRoutes = [],
+  headsign,
+}: UpcomingArrivalsProps) {
+  const now = useNow();
+  const stopDepartures = useStopDepartures(
+    stopGtfsId,
+    now > 0 ? new Date(now).toISOString() : undefined,
+    includeRoutes,
+    excludeRoutes,
+    headsign
+  );
+  const displayArrivals =
+    stopDepartures.length > 0
+      ? stopDepartures.map(mapStopDepartureToArrival)
+      : arrivals;
+
+  if (displayArrivals.length === 0) return null;
 
   // Group by stop
   const byStop = new Map<string, UpcomingArrival[]>();
-  for (const a of arrivals) {
+  for (const a of displayArrivals) {
     const key = `${a.stopCode}-${a.stopName}`;
     if (!byStop.has(key)) byStop.set(key, []);
     byStop.get(key)!.push(a);
