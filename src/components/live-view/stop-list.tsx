@@ -1,15 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
 import type { ActiveLeg } from "@/lib/route-detection";
 import type { StopOnRoute } from "@/lib/route-detection";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { distanceMeters } from "@/hooks/use-geolocation";
-import { useNow } from "@/hooks/use-now";
-
-const APPROACHING_STOP_DISTANCE_M = 200;
-const AT_STOP_DISTANCE_M = 80;
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fi-FI", {
@@ -33,99 +27,7 @@ type VisibleEntry =
   | { type: "stop"; stop: StopOnRoute; index: number }
   | { type: "gap"; hiddenCount: number; section: "passed" | "upcoming" };
 
-type StopHighlightMode = "static" | "approaching";
-
-interface UserPosition {
-  latitude: number;
-  longitude: number;
-}
-
-interface StopHighlight {
-  index: number;
-  mode: StopHighlightMode;
-}
-
-interface LockedStopHighlight extends StopHighlight {
-  legKey: string;
-}
-
-const lockedHighlights = new Map<string, LockedStopHighlight>();
-
-function getStopReferenceTimeMs(stop: StopOnRoute): number | null {
-  const referenceTime = stop.realtimeTime ?? stop.scheduledTime;
-  return referenceTime ? new Date(referenceTime).getTime() : null;
-}
-
-function getStopDistance(stop: StopOnRoute, userPosition: UserPosition): number {
-  return distanceMeters(
-    userPosition.latitude,
-    userPosition.longitude,
-    stop.lat,
-    stop.lon
-  );
-}
-
-function resolveStopHighlight(
-  stops: StopOnRoute[],
-  userPosition: UserPosition | null,
-  nowMs: number
-): StopHighlight {
-  const detectedIndex = Math.max(0, stops.findIndex((s) => s.status === "current"));
-  if (!userPosition) return { index: detectedIndex, mode: "static" };
-
-  const detectedStop = stops[detectedIndex];
-  const detectedDistance = getStopDistance(detectedStop, userPosition);
-  const detectedTimeMs = getStopReferenceTimeMs(detectedStop);
-  const isBeforeDetectedStop =
-    detectedTimeMs === null || nowMs < detectedTimeMs;
-  const nextIndex = detectedIndex + 1;
-  const nextStop = nextIndex < stops.length ? stops[nextIndex] : null;
-  const nextDistance = nextStop ? getStopDistance(nextStop, userPosition) : null;
-  const nextTimeMs = nextStop ? getStopReferenceTimeMs(nextStop) : null;
-  const isBeforeNextStop = nextTimeMs === null || nowMs < nextTimeMs;
-  const nextStopIsCloser =
-    nextDistance !== null && nextDistance + 5 < detectedDistance;
-
-  if (detectedIndex > 0 && isBeforeDetectedStop) {
-    if (nextStopIsCloser) {
-      if (
-        nextDistance !== null &&
-        isBeforeNextStop &&
-        nextDistance <= APPROACHING_STOP_DISTANCE_M
-      ) {
-        return { index: nextIndex, mode: "approaching" };
-      }
-
-      return { index: detectedIndex, mode: "static" };
-    }
-
-    if (detectedDistance <= AT_STOP_DISTANCE_M) {
-      return { index: detectedIndex, mode: "static" };
-    }
-
-    if (detectedDistance <= APPROACHING_STOP_DISTANCE_M) {
-      return { index: detectedIndex, mode: "approaching" };
-    }
-
-    return { index: detectedIndex - 1, mode: "static" };
-  }
-
-  if (nextIndex < stops.length) {
-    if (nextDistance !== null && nextDistance <= AT_STOP_DISTANCE_M) {
-      return { index: nextIndex, mode: "static" };
-    }
-
-    if (
-      nextDistance !== null &&
-      isBeforeNextStop &&
-      nextDistance <= APPROACHING_STOP_DISTANCE_M
-    ) {
-      return { index: nextIndex, mode: "approaching" };
-    }
-  }
-
-  return { index: detectedIndex, mode: "static" };
-}
+const lockedStopIndices = new Map<string, number>();
 
 function getLegKey(activeLeg: ActiveLeg): string {
   const { leg } = activeLeg;
@@ -136,30 +38,16 @@ function getLegKey(activeLeg: ActiveLeg): string {
   ].join("|");
 }
 
-function lockStopHighlight(
-  candidate: StopHighlight,
-  legKey: string
-): LockedStopHighlight {
-  const previous = lockedHighlights.get(legKey);
-  if (!previous || previous.legKey !== legKey) {
-    const next = { ...candidate, legKey };
-    lockedHighlights.set(legKey, next);
-    return next;
+function lockStopIndex(candidateIndex: number, legKey: string): number {
+  const previousIndex = lockedStopIndices.get(legKey);
+  if (previousIndex === undefined) {
+    lockedStopIndices.set(legKey, candidateIndex);
+    return candidateIndex;
   }
 
-  if (candidate.index > previous.index) {
-    const next = { ...candidate, legKey };
-    lockedHighlights.set(legKey, next);
-    return next;
-  }
-
-  if (candidate.index === previous.index && candidate.mode !== previous.mode) {
-    const next = { ...candidate, legKey };
-    lockedHighlights.set(legKey, next);
-    return next;
-  }
-
-  return previous;
+  const lockedIndex = Math.max(previousIndex, candidateIndex);
+  lockedStopIndices.set(legKey, lockedIndex);
+  return lockedIndex;
 }
 
 /**
@@ -207,23 +95,18 @@ function buildVisibleEntries(stops: StopOnRoute[], currentIdx: number): VisibleE
 
 interface StopListProps {
   activeLeg: ActiveLeg;
-  userPosition: UserPosition | null;
 }
 
-export function StopList({ activeLeg, userPosition }: StopListProps) {
+export function StopList({ activeLeg }: StopListProps) {
   const { leg, stops } = activeLeg;
   const shortName = leg.trip?.routeShortName;
   const headsign = leg.trip?.tripHeadsign;
-  const now = useNow();
   const legKey = getLegKey(activeLeg);
-  const candidateHighlight = useMemo(
-    () => resolveStopHighlight(stops, userPosition, now),
-    [now, stops, userPosition]
-  );
-  const highlight = lockStopHighlight(candidateHighlight, legKey);
+  const detectedIndex = Math.max(0, stops.findIndex((s) => s.status === "current"));
+  const currentIndex = lockStopIndex(detectedIndex, legKey);
 
-  const entries = buildVisibleEntries(stops, highlight.index);
-  const currentStop = stops[highlight.index];
+  const entries = buildVisibleEntries(stops, currentIndex);
+  const currentStop = stops[currentIndex];
   const currentDelayMin =
     currentStop?.delaySeconds !== undefined
       ? Math.round(currentStop.delaySeconds / 60)
@@ -231,7 +114,7 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
   let headerDelayMin = currentDelayMin;
   if (headerDelayMin === null || headerDelayMin === 0) {
     headerDelayMin = null;
-    for (let i = highlight.index + 1; i < stops.length; i++) {
+    for (let i = currentIndex + 1; i < stops.length; i++) {
       const stop = stops[i];
       const nextDelayMin =
         stop?.delaySeconds !== undefined
@@ -299,12 +182,11 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
 
               const { stop, index } = entry;
               const visualStatus =
-                index < highlight.index
+                index < currentIndex
                   ? "passed"
-                  : index === highlight.index
+                  : index === currentIndex
                   ? "current"
                   : "upcoming";
-              const isApproaching = index === highlight.index && highlight.mode === "approaching";
               return (
                 <div
                   key={`stop-${index}`}
@@ -314,9 +196,7 @@ export function StopList({ activeLeg, userPosition }: StopListProps) {
                 >
                   <div
                     className={`w-3 h-3 rounded-full border-2 shrink-0 z-10 ${
-                      isApproaching
-                        ? "stop-approaching-dot"
-                        : visualStatus === "current"
+                      visualStatus === "current"
                         ? "bg-green-500 border-green-600 ring-2 ring-green-300"
                         : visualStatus === "passed"
                         ? "bg-muted-foreground border-muted-foreground"

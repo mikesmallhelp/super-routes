@@ -148,7 +148,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
       {isExpanded && journeyState && activeConnection && layout ? (
         <div className="space-y-2">
           {journeyState.mode === "on-vehicle" && journeyState.activeLeg && (
-            <StopList activeLeg={journeyState.activeLeg} userPosition={userPos} />
+            <StopList activeLeg={journeyState.activeLeg} />
           )}
           {journeyState.mode === "arrived" && (
             <ArrivalMessageCard hasRemainingWalk={layout.hasRemainingWalk} />
