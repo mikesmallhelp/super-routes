@@ -55,10 +55,11 @@ export function UpcomingArrivals({
     excludeRoutes,
     headsign
   );
-  const displayArrivals =
+  const displayArrivals = (
     stopDepartures.length > 0
       ? stopDepartures.map(mapStopDepartureToArrival)
-      : arrivals;
+      : arrivals
+  ).slice(0, 1);
 
   if (displayArrivals.length === 0) return null;
 
