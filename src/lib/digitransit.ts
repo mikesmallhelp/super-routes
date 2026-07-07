@@ -405,6 +405,29 @@ export async function fetchStopDepartures(
   }).slice(0, limit);
 }
 
+export async function fetchStopCoordsByCode(
+  code: string
+): Promise<{ lat: number; lon: number; name: string } | null> {
+  const url = `${GEOCODE_URL}?text=${encodeURIComponent(code)}&layers=stop&size=10`;
+  const res = await fetch(url, {
+    headers: { "digitransit-subscription-key": API_KEY },
+  });
+  const data = await res.json();
+  log("StopByCode response", data);
+
+  type GeoFeature = {
+    geometry: { coordinates: [number, number] };
+    properties: { name: string; addendum?: { GTFS?: { code?: string } } };
+  };
+  const feature = (data.features as GeoFeature[] | undefined)?.find(
+    (f) => f.properties.addendum?.GTFS?.code === code
+  );
+  if (!feature) return null;
+
+  const [lon, lat] = feature.geometry.coordinates;
+  return { lat, lon, name: feature.properties.name };
+}
+
 export async function fetchRoutes(
   origin: Coordinates,
   destination: Coordinates,

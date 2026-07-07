@@ -2,22 +2,14 @@
 
 import useSWR from "swr";
 import type { Connection, SavedTrip, VehicleFilterMode } from "@/lib/types";
-import { generateMockConnections, SCENARIO_INTERVAL_MS } from "@/lib/mock-data";
 
-const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
-const MOCK_REFRESH_INTERVAL_MS = Math.max(500, Math.min(5_000, Math.floor(SCENARIO_INTERVAL_MS / 6)));
-const REFRESH_INTERVAL_MS = USE_MOCK ? MOCK_REFRESH_INTERVAL_MS : 30_000;
+const REFRESH_INTERVAL_MS = 30_000;
 
 interface RoutesResponse {
   connections: Connection[];
 }
 
 async function fetchTripRoutes(trip: SavedTrip): Promise<{ current: Connection[]; past: Connection[] }> {
-  if (USE_MOCK) {
-    const mock = generateMockConnections();
-    return { current: mock, past: mock };
-  }
-
   // Fetch current routes and past routes (90 min ago) in parallel
   const pastTime = new Date(Date.now() - 90 * 60 * 1000).toISOString();
 
