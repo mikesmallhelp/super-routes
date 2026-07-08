@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { buildStopList } from "@/lib/route-detection";
 import { usePreviousDeparture } from "@/hooks/use-previous-departure";
 import { useNow } from "@/hooks/use-now";
+import { useStopDepartures } from "@/hooks/use-stop-departures";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fi-FI", {
@@ -29,16 +30,42 @@ interface UpcomingTripCardProps {
   leg: Leg;
   showPreviousDeparture?: boolean;
   earliestCatchTime?: string;
+  syncFromStop?: {
+    stopGtfsId?: string;
+    includeRoutes?: string[];
+    excludeRoutes?: string[];
+    headsign?: string;
+  };
 }
 
 export function UpcomingTripCard({
   leg,
   showPreviousDeparture = false,
   earliestCatchTime,
+  syncFromStop,
 }: UpcomingTripCardProps) {
   const shortName = leg.trip?.routeShortName;
   const headsign = leg.trip?.tripHeadsign;
   const stops = buildStopList(leg);
+  const now = useNow();
+  const stopDepartures = useStopDepartures(
+    syncFromStop?.stopGtfsId,
+    syncFromStop?.stopGtfsId && now > 0 ? new Date(now).toISOString() : undefined,
+    syncFromStop?.includeRoutes ?? [],
+    syncFromStop?.excludeRoutes ?? [],
+    syncFromStop?.headsign
+  );
+  const syncedDeparture = stopDepartures[0];
+  const legStartReferenceTime = leg.start.estimated?.time ?? leg.start.scheduledTime;
+  const syncedStartTime = syncedDeparture?.realtimeTime ?? syncedDeparture?.scheduledTime;
+  const timeShiftMs =
+    syncedStartTime !== undefined
+      ? new Date(syncedStartTime).getTime() - new Date(legStartReferenceTime).getTime()
+      : 0;
+  const shiftTime = (iso: string) =>
+    timeShiftMs === 0
+      ? iso
+      : new Date(new Date(iso).getTime() + timeShiftMs).toISOString();
   const startDelayMin = leg.start.estimated?.time
     ? Math.round(
         (new Date(leg.start.estimated.time).getTime() -
@@ -46,7 +73,10 @@ export function UpcomingTripCard({
           60_000
       )
     : null;
-  let headerDelayMin = startDelayMin;
+  let headerDelayMin =
+    syncedDeparture?.delaySeconds !== undefined
+      ? Math.round(syncedDeparture.delaySeconds / 60)
+      : startDelayMin;
   if (headerDelayMin === null || headerDelayMin === 0) {
     headerDelayMin = null;
     for (const stop of stops) {
@@ -67,7 +97,6 @@ export function UpcomingTripCard({
     showPreviousDeparture ? leg.start.scheduledTime : undefined
   );
   const prevTime = prevDep.realtimeTime ?? prevDep.scheduledTime;
-  const now = useNow();
   const canCatchPreviousDeparture =
     showPreviousDeparture &&
     prevTime &&
@@ -94,7 +123,7 @@ export function UpcomingTripCard({
             <span className="text-sm text-muted-foreground">→ {headsign}</span>
           )}
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-            {formatTime(leg.start.scheduledTime)}–{formatTime(leg.end.scheduledTime)}
+            {formatTime(shiftTime(leg.start.scheduledTime))}–{formatTime(shiftTime(leg.end.scheduledTime))}
           </span>
         </div>
 
@@ -139,7 +168,7 @@ export function UpcomingTripCard({
                           : "text-muted-foreground"
                       }
                     >
-                      {formatTime(stop.realtimeTime ?? stop.scheduledTime)}
+                      {formatTime(shiftTime(stop.realtimeTime ?? stop.scheduledTime))}
                     </div>
                   </div>
                 </div>

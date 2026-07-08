@@ -169,7 +169,21 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
           ))}
 
           {/* The trip user is waiting for (waiting mode) */}
-          {layout.waitingLeg && <UpcomingTripCard leg={layout.waitingLeg} />}
+          {layout.waitingLeg && (
+            <UpcomingTripCard
+              leg={layout.waitingLeg}
+              syncFromStop={{
+                stopGtfsId:
+                  journeyState.upcomingArrival?.stopGtfsId ?? layout.waitingLeg.from.stop?.gtfsId,
+                includeRoutes: layout.waitingLeg.trip?.routeShortName
+                  ? [layout.waitingLeg.trip.routeShortName]
+                  : trip.selectedVehicles,
+                excludeRoutes: trip.excludedVehicles ?? [],
+                headsign:
+                  layout.waitingLeg.trip?.tripHeadsign ?? journeyState.upcomingArrival?.headsign,
+              }}
+            />
+          )}
 
           {/* The next upcoming trip after the current bus (on-vehicle mode) */}
           {layout.upcomingLeg && (
