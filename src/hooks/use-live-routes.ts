@@ -29,7 +29,7 @@ async function fetchTripRoutes(trip: SavedTrip): Promise<{ current: Connection[]
       body: JSON.stringify({
         origin: trip.originCoords,
         destination: trip.destinationCoords,
-        numItineraries: 10,
+        numItineraries: 20,
         dateTime: pastTime,
       }),
     }),

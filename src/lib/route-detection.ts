@@ -607,6 +607,13 @@ export function detectJourneyState(
   userLat: number,
   userLon: number
 ): JourneyState | null {
+  if (!Number.isFinite(userLat) || !Number.isFinite(userLon)) {
+    console.warn(
+      `[Detection] Skipping journey detection due to invalid user coordinates: lat=${userLat}, lon=${userLon}`
+    );
+    return null;
+  }
+
   console.log(
     `[Detection] Detecting journey state: ${connections.length} connections, user @${userLat.toFixed(5)},${userLon.toFixed(5)}`
   );

@@ -1,41 +1,66 @@
 /**
  * Mock service for development and testing.
- * Enable via NEXT_PUBLIC_MOCK_STOP=<stop_code> in .env.local.
+ * Enable via either:
+ * - NEXT_PUBLIC_MOCK_VEHICLE_STOP_FIRST / NEXT_PUBLIC_MOCK_VEHICLE_STOP_LAST (priority)
+ * - NEXT_PUBLIC_MOCK_STOP (stop fallback)
  *
- * When enabled, the user's location is fixed at the specified stop.
- * Coordinates are fetched from the Digitransit API at startup.
+ * Vehicle mock:
+ * - Picks first matching vehicle travelling FIRST -> LAST
+ * - Locks to the same vehicle id for subsequent updates
+ *
+ * Stop mock:
+ * - Fixes user's location at the specified stop
  */
 
-interface StopCoords {
-  lat: number;
-  lon: number;
-  name: string;
+interface MockPositionResponseEnabledVehicle {
+  enabled: true;
+  mode: "vehicle";
+  latitude: number;
+  longitude: number;
+  vehicleId: string;
 }
 
+interface MockPositionResponseEnabledStop {
+  enabled: true;
+  mode: "stop";
+  latitude: number;
+  longitude: number;
+  stopCode: string;
+  stopName: string;
+}
+
+type MockPositionResponse =
+  | MockPositionResponseEnabledVehicle
+  | MockPositionResponseEnabledStop
+  | { enabled: false };
+
 class MockService {
-  readonly stopCode: string | null;
-
-  constructor() {
-    this.stopCode = process.env.NEXT_PUBLIC_MOCK_STOP ?? null;
-  }
-
-  get isEnabled(): boolean {
-    return !!this.stopCode;
-  }
+  private lockedVehicleId: string | null = null;
 
   async fetchUserPosition(): Promise<{ latitude: number; longitude: number } | null> {
-    if (!this.stopCode) return null;
     try {
-      const res = await fetch(`/api/stop-coords?code=${encodeURIComponent(this.stopCode)}`);
+      const params = new URLSearchParams();
+      if (this.lockedVehicleId) params.set("lockedVehicleId", this.lockedVehicleId);
+      const query = params.toString();
+      const res = await fetch(`/api/mock-user-position${query ? `?${query}` : ""}`);
       if (!res.ok) {
-        console.error(`[Mock] Stop not found: ${this.stopCode} (${res.status})`);
+        console.error(`[Mock] Failed to fetch mock user position (${res.status})`);
         return null;
       }
-      const stop: StopCoords = await res.json();
-      console.log(`[Mock] Position set to stop ${this.stopCode} (${stop.name}): ${stop.lat}, ${stop.lon}`);
-      return { latitude: stop.lat, longitude: stop.lon };
+      const payload = (await res.json()) as MockPositionResponse;
+      if (!payload.enabled) return null;
+
+      if (payload.mode === "vehicle") {
+        if (this.lockedVehicleId !== payload.vehicleId) {
+          this.lockedVehicleId = payload.vehicleId;
+          console.log(`[Mock] Locked to vehicle ${payload.vehicleId}`);
+        }
+        return { latitude: payload.latitude, longitude: payload.longitude };
+      }
+
+      return { latitude: payload.latitude, longitude: payload.longitude };
     } catch (e) {
-      console.error(`[Mock] Failed to fetch stop coords for ${this.stopCode}:`, e);
+      console.error("[Mock] Failed to fetch mock user position:", e);
       return null;
     }
   }

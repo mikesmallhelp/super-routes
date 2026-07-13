@@ -25,6 +25,7 @@ let snapshot: GeoPosition | null = initialPosition();
 const subscribers = new Set<() => void>();
 let pollIntervalId: ReturnType<typeof setInterval> | null = null;
 let watchId: number | null = null;
+let mockPollInFlight = false;
 
 const geolocationOptions: PositionOptions = {
   enableHighAccuracy: true,
@@ -54,10 +55,26 @@ function requestBrowserPosition() {
   );
 }
 
-function startMockLocation() {
-  mockService.fetchUserPosition().then((pos) => {
-    if (pos) setSnapshot(pos);
-  });
+async function updateMockLocation(): Promise<boolean> {
+  if (mockPollInFlight) return true;
+  mockPollInFlight = true;
+  try {
+    const pos = await mockService.fetchUserPosition();
+    if (!pos) return false;
+    setSnapshot(pos);
+    return true;
+  } finally {
+    mockPollInFlight = false;
+  }
+}
+
+async function startMockLocation(): Promise<boolean> {
+  const hasMock = await updateMockLocation();
+  if (!hasMock) return false;
+  pollIntervalId = setInterval(() => {
+    void updateMockLocation();
+  }, GEOLOCATION_POLL_INTERVAL_MS);
+  return true;
 }
 
 function startBrowserLocation() {
@@ -79,16 +96,15 @@ function startBrowserLocation() {
 }
 
 function startLocationUpdates() {
-  if (mockService.isEnabled) {
-    startMockLocation();
-    return;
-  }
+  void (async () => {
+    if (await startMockLocation()) return;
 
-  const devLat = process.env.NEXT_PUBLIC_DEV_LAT;
-  const devLon = process.env.NEXT_PUBLIC_DEV_LON;
-  if (devLat && devLon) return;
+    const devLat = process.env.NEXT_PUBLIC_DEV_LAT;
+    const devLon = process.env.NEXT_PUBLIC_DEV_LON;
+    if (devLat && devLon) return;
 
-  startBrowserLocation();
+    startBrowserLocation();
+  })();
 }
 
 function stopLocationUpdates() {
