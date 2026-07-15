@@ -34,19 +34,18 @@ function ArrivalMessageCard({ hasRemainingWalk }: { hasRemainingWalk: boolean })
 }
 
 export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTripCardProps) {
-  const { connections, pastConnections, isLoading, isValidating, error } = useLiveRoutes(trip);
+  const {
+    connections,
+    pastConnections,
+    detectionConnections,
+    isLoading,
+    isValidating,
+    error,
+  } = useLiveRoutes(trip);
   const hasIncluded = trip.selectedVehicles.length > 0;
   const hasExcluded = (trip.excludedVehicles ?? []).length > 0;
   const mode = trip.vehicleFilterMode ?? "and";
   const userPos = useGeolocation();
-
-  // Combine past + current connections for journey detection. Past covers
-  // trips that started before now (active mode); current covers trips that
-  // start in the future (waiting at stop before bus arrives).
-  const detectionConnections = useMemo(
-    () => [...pastConnections, ...connections],
-    [pastConnections, connections]
-  );
 
   const journeyState = useMemo(() => {
     if (!userPos || detectionConnections.length === 0) return null;
@@ -60,13 +59,56 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
   const activeConnection =
     journeyState ? detectionConnections[journeyState.connectionIndex] : null;
 
+  const preferredLayoutConnection = useMemo(() => {
+    if (
+      !journeyState ||
+      journeyState.mode !== "on-vehicle" ||
+      !activeConnection ||
+      trip.selectedVehicles.length === 0
+    ) {
+      return null;
+    }
+
+    const activeLeg = activeConnection.legs[journeyState.legIndex];
+    const activeRoute = activeLeg.trip?.routeShortName;
+    if (!activeRoute) return null;
+
+    const activeTripId = activeLeg.trip?.gtfsId;
+    const activeStartMs = new Date(activeLeg.start.scheduledTime).getTime();
+    const candidates = [...pastConnections, ...connections].flatMap((connection) =>
+      connection.legs.flatMap((leg, legIndex) => {
+        if (leg.trip?.routeShortName !== activeRoute) return [];
+        const hasLaterTransit = connection.legs
+          .slice(legIndex + 1)
+          .some((laterLeg) => laterLeg.mode !== "WALK" && !!laterLeg.trip);
+        if (!hasLaterTransit) return [];
+
+        return [{
+          connection,
+          legIndex,
+          tripMatches: !!activeTripId && leg.trip.gtfsId === activeTripId,
+          startDistance: Math.abs(
+            new Date(leg.start.scheduledTime).getTime() - activeStartMs
+          ),
+        }];
+      })
+    );
+
+    candidates.sort((a, b) => {
+      if (a.tripMatches !== b.tripMatches) return a.tripMatches ? -1 : 1;
+      return a.startDistance - b.startDistance;
+    });
+
+    return candidates[0] ?? null;
+  }, [activeConnection, connections, journeyState, pastConnections, trip.selectedVehicles.length]);
+
   // Compute which leg should be rendered as the "upcoming trip card":
   //   - waiting: the leg the user is waiting for (== activeIdx)
   //   - on-vehicle: the next transit leg after the current active one
   const layout = useMemo(() => {
     if (!journeyState || !activeConnection) return null;
-    const legs = activeConnection.legs;
-    const activeIdx = journeyState.legIndex;
+    const legs = preferredLayoutConnection?.connection.legs ?? activeConnection.legs;
+    const activeIdx = preferredLayoutConnection?.legIndex ?? journeyState.legIndex;
 
     let upcomingIdx: number | null = null;
     if (journeyState.mode === "waiting") {
@@ -87,7 +129,8 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
     const futureAfter = upcomingIdx !== null ? legs.slice(upcomingIdx + 1) : [];
     const activeLegEndTime =
       journeyState.mode === "on-vehicle"
-        ? legs[activeIdx].end.estimated?.time ?? legs[activeIdx].end.scheduledTime
+        ? activeConnection.legs[journeyState.legIndex].end.estimated?.time ??
+          activeConnection.legs[journeyState.legIndex].end.scheduledTime
         : undefined;
 
     return {
@@ -96,9 +139,11 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
       waitingLeg,
       futureAfter,
       activeLegEndTime,
+      activeLegEndStopCode:
+        journeyState.mode === "on-vehicle" ? legs[activeIdx].to.stop?.code : undefined,
       hasRemainingWalk: !!journeyState.remainingWalk,
     };
-  }, [journeyState, activeConnection]);
+  }, [journeyState, activeConnection, preferredLayoutConnection]);
 
   return (
     <div className="space-y-3">
@@ -148,7 +193,10 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
       {isExpanded && journeyState && activeConnection && layout ? (
         <div className="space-y-2">
           {journeyState.mode === "on-vehicle" && journeyState.activeLeg && (
-            <StopList activeLeg={journeyState.activeLeg} />
+            <StopList
+              activeLeg={journeyState.activeLeg}
+              endStopCode={layout.activeLegEndStopCode}
+            />
           )}
           {journeyState.mode === "arrived" && (
             <ArrivalMessageCard hasRemainingWalk={layout.hasRemainingWalk} />

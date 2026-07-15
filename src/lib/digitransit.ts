@@ -3,6 +3,15 @@ import { Coordinates, Connection, Leg, VehiclePosition } from "./types";
 const API_KEY = process.env.DIGITRANSIT_API_KEY!;
 const GEOCODE_URL = "https://api.digitransit.fi/geocoding/v1/search";
 const ROUTING_URL = "https://api.digitransit.fi/routing/v2/hsl/gtfs/v1";
+const MINIMUM_ROUTE_RESULTS = 5;
+const ROUTE_FALLBACK_OFFSETS_MS = [
+  30 * 60 * 1000,
+  60 * 60 * 1000,
+  2 * 60 * 60 * 1000,
+  4 * 60 * 60 * 1000,
+  8 * 60 * 60 * 1000,
+  24 * 60 * 60 * 1000,
+];
 
 function log(label: string, data: unknown) {
   if (process.env.DIGITRANSIT_LOG === "true") {
@@ -434,35 +443,73 @@ export async function fetchRoutes(
   numItineraries: number = 5,
   dateTime?: string
 ): Promise<Connection[]> {
-  const now = dateTime || new Date().toISOString();
-  const variables = {
-    originLat: origin.latitude,
-    originLon: origin.longitude,
-    destLat: destination.latitude,
-    destLon: destination.longitude,
-    numItineraries,
-    dateTime: now,
+  const startTime = new Date(dateTime || Date.now());
+
+  const fetchAt = async (queryTime: Date): Promise<Connection[]> => {
+    const variables = {
+      originLat: origin.latitude,
+      originLon: origin.longitude,
+      destLat: destination.latitude,
+      destLon: destination.longitude,
+      numItineraries,
+      dateTime: queryTime.toISOString(),
+    };
+
+    log("Routes request", { variables });
+
+    const res = await fetch(ROUTING_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "digitransit-subscription-key": API_KEY,
+      },
+      body: JSON.stringify({ query: PLAN_QUERY, variables }),
+    });
+
+    const data = await res.json();
+    log("Routes response", data);
+
+    if (data.errors) {
+      console.error("[Digitransit] GraphQL errors:", data.errors);
+      throw new Error(data.errors[0]?.message || "GraphQL error");
+    }
+
+    const edges = data.data?.planConnection?.edges || [];
+    return edges.map((edge: { node: GraphqlConnection }) => mapConnection(edge.node));
   };
 
-  log("Routes request", { variables });
+  const connectionKey = (connection: Connection) =>
+    [
+      connection.start,
+      connection.end,
+      ...connection.legs.map((leg) =>
+        [
+          leg.mode,
+          leg.trip?.gtfsId ?? leg.trip?.routeShortName ?? "",
+          leg.start.scheduledTime,
+          leg.end.scheduledTime,
+        ].join("|")
+      ),
+    ].join("::");
 
-  const res = await fetch(ROUTING_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "digitransit-subscription-key": API_KEY,
-    },
-    body: JSON.stringify({ query: PLAN_QUERY, variables }),
-  });
+  const connections = await fetchAt(startTime);
+  const seen = new Set(connections.map(connectionKey));
 
-  const data = await res.json();
-  log("Routes response", data);
+  for (const offsetMs of ROUTE_FALLBACK_OFFSETS_MS) {
+    if (connections.length >= MINIMUM_ROUTE_RESULTS) break;
 
-  if (data.errors) {
-    console.error("[Digitransit] GraphQL errors:", data.errors);
-    throw new Error(data.errors[0]?.message || "GraphQL error");
+    const additionalConnections = await fetchAt(
+      new Date(startTime.getTime() + offsetMs)
+    );
+    for (const connection of additionalConnections) {
+      const key = connectionKey(connection);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      connections.push(connection);
+    }
   }
 
-  const edges = data.data?.planConnection?.edges || [];
-  return edges.map((edge: { node: GraphqlConnection }) => mapConnection(edge.node));
+  return connections.sort(
+    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+  );
 }

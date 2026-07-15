@@ -4,6 +4,7 @@ import useSWR from "swr";
 import type { Connection, SavedTrip, VehicleFilterMode } from "@/lib/types";
 
 const REFRESH_INTERVAL_MS = 30_000;
+const CURRENT_NUM_ITINERARIES = 20;
 const PAST_OFFSETS_MINUTES = [120, 90, 60, 30];
 const PAST_NUM_ITINERARIES = 30;
 
@@ -68,7 +69,7 @@ async function fetchTripRoutes(trip: SavedTrip): Promise<{ current: Connection[]
   );
 
   const [currentConnections, ...pastBatches] = await Promise.all([
-    fetchRoutesAt(trip, 10),
+    fetchRoutesAt(trip, CURRENT_NUM_ITINERARIES),
     ...pastTimes.map((pastTime) => fetchRoutesAt(trip, PAST_NUM_ITINERARIES, pastTime)),
   ]);
 
@@ -102,6 +103,26 @@ function filterConnections(
   });
 }
 
+function filterConnectionsForDetection(
+  connections: Connection[],
+  selectedVehicles: string[],
+  excludedVehicles: string[]
+): Connection[] {
+  return connections.filter((conn) => {
+    const vehiclesInConn = conn.legs
+      .filter((leg) => leg.trip?.routeShortName)
+      .map((leg) => leg.trip!.routeShortName);
+
+    if (excludedVehicles.some((vehicle) => vehiclesInConn.includes(vehicle))) {
+      return false;
+    }
+    return (
+      selectedVehicles.length === 0 ||
+      selectedVehicles.some((vehicle) => vehiclesInConn.includes(vehicle))
+    );
+  });
+}
+
 export function useLiveRoutes(trip: SavedTrip) {
   const { data, error, isLoading, isValidating, mutate } = useSWR(
     `live-routes-${trip.id}`,
@@ -132,9 +153,23 @@ export function useLiveRoutes(trip: SavedTrip) {
       )
     : [];
 
+  // A user can be on one selected vehicle before their later transfer begins.
+  // Keep selected lines as an OR condition for state detection, while the
+  // displayed route alternatives retain the saved AND/OR preference.
+  const detectionConnections = data
+    ? dedupeConnections(
+        filterConnectionsForDetection(
+          [...data.past, ...data.current],
+          trip.selectedVehicles,
+          trip.excludedVehicles ?? []
+        )
+      )
+    : [];
+
   return {
     connections: filtered,
     pastConnections: pastFiltered,
+    detectionConnections,
     allConnections: data?.current || [],
     error,
     isLoading,

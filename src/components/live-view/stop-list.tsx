@@ -95,15 +95,21 @@ function buildVisibleEntries(stops: StopOnRoute[], currentIdx: number): VisibleE
 
 interface StopListProps {
   activeLeg: ActiveLeg;
+  endStopCode?: string;
 }
 
-export function StopList({ activeLeg }: StopListProps) {
-  const { leg, stops } = activeLeg;
+export function StopList({ activeLeg, endStopCode }: StopListProps) {
+  const { leg, stops: allStops } = activeLeg;
   const shortName = leg.trip?.routeShortName;
   const headsign = leg.trip?.tripHeadsign;
   const legKey = getLegKey(activeLeg);
-  const detectedIndex = Math.max(0, stops.findIndex((s) => s.status === "current"));
-  const currentIndex = lockStopIndex(detectedIndex, legKey);
+  const detectedIndex = Math.max(0, allStops.findIndex((s) => s.status === "current"));
+  const endStopIndex = endStopCode
+    ? allStops.findIndex((stop) => stop.code === endStopCode)
+    : -1;
+  const stops =
+    endStopIndex >= detectedIndex ? allStops.slice(0, endStopIndex + 1) : allStops;
+  const currentIndex = Math.min(lockStopIndex(detectedIndex, legKey), stops.length - 1);
 
   const entries = buildVisibleEntries(stops, currentIndex);
   const currentStop = stops[currentIndex];
