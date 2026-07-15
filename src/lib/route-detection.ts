@@ -41,6 +41,7 @@ const VEHICLE_MATCH_MAX_DISTANCE_M = 250;
 const VEHICLE_POSITION_MAX_AGE_MS = 90_000;
 const STOP_TIME_MATCH_TOLERANCE_MS = 6 * 60 * 1000;
 const SEGMENT_MATCH_MAX_DISTANCE_M = 400;
+const GEOMETRIC_SEGMENT_MATCH_MAX_DISTANCE_M = 100;
 const STOP_PROXIMITY_OVERRIDE_M = 150;
 const WAITING_STOP_MAX_DISTANCE_M = 150;
 const STOP_SWITCH_MARGIN_M = 40;
@@ -246,6 +247,37 @@ function getTemporalSegmentMatch(
   return null;
 }
 
+function getGeometricSegmentMatch(
+  stops: StopWithTimes[],
+  userLat: number,
+  userLon: number
+): { distance: number; currentIndex: number } | null {
+  if (stops.length < 2) return null;
+
+  let best: { distance: number; currentIndex: number } | null = null;
+  for (let i = 0; i < stops.length - 1; i++) {
+    const distance = distanceToSegmentMeters(
+      userLat,
+      userLon,
+      stops[i].lat,
+      stops[i].lon,
+      stops[i + 1].lat,
+      stops[i + 1].lon
+    );
+    if (distance > GEOMETRIC_SEGMENT_MATCH_MAX_DISTANCE_M) continue;
+
+    const distanceToStart = distanceMeters(userLat, userLon, stops[i].lat, stops[i].lon);
+    const distanceToEnd = distanceMeters(userLat, userLon, stops[i + 1].lat, stops[i + 1].lon);
+    const candidate = {
+      distance,
+      currentIndex: distanceToStart <= distanceToEnd ? i : i + 1,
+    };
+    if (!best || candidate.distance < best.distance) best = candidate;
+  }
+
+  return best;
+}
+
 function getLegDetectionKey(leg: Leg): string | null {
   if (leg.trip?.gtfsId) return leg.trip.gtfsId;
   if (!leg.trip?.routeShortName) return null;
@@ -371,7 +403,6 @@ export function detectActiveLeg(
       const legEnd = leg.end.estimated?.time
         ? new Date(leg.end.estimated.time)
         : new Date(leg.end.scheduledTime);
-
       // Only consider legs that are in progress
       if (now < legStart || now > legEnd) continue;
 
@@ -386,10 +417,15 @@ export function detectActiveLeg(
           : null;
       const temporalSegmentMatch =
         closest.distance > STOP_PROXIMITY_OVERRIDE_M ? rawTemporalSegmentMatch : null;
+      const geometricSegmentMatch =
+        vehicleMatchDistance === null && temporalSegmentMatch === null
+          ? getGeometricSegmentMatch(stops, userLat, userLon)
+          : null;
 
       if (
         vehicleMatchDistance === null &&
         temporalSegmentMatch === null &&
+        geometricSegmentMatch === null &&
         closest.distance >= MAX_DISTANCE_M
       ) {
         continue;
@@ -397,6 +433,7 @@ export function detectActiveLeg(
       if (
         vehicleMatchDistance === null &&
         temporalSegmentMatch === null &&
+        geometricSegmentMatch === null &&
         getClosestStopTimeDistanceMs(stops, closest.index, now) > STOP_TIME_MATCH_TOLERANCE_MS
       ) {
         continue;
@@ -416,13 +453,23 @@ export function detectActiveLeg(
         }
       }
 
-      const rawStatusIndex = temporalSegmentMatch?.currentIndex ?? closest.index;
+      const rawStatusIndex =
+        temporalSegmentMatch?.currentIndex ?? geometricSegmentMatch?.currentIndex ?? closest.index;
       const statusIndex = getStableStopIndex(leg, stops, rawStatusIndex, now, userLat, userLon);
       const candidateDistance =
-        vehicleMatchDistance ?? temporalSegmentMatch?.distance ?? closest.distance;
+        vehicleMatchDistance ??
+        temporalSegmentMatch?.distance ??
+        geometricSegmentMatch?.distance ??
+        closest.distance;
       const timeDistanceMs = getClosestStopTimeDistanceMs(stops, statusIndex, now);
       const matchRank =
-        vehicleMatchDistance !== null ? 0 : temporalSegmentMatch !== null ? 1 : 2;
+        vehicleMatchDistance !== null
+          ? 0
+          : temporalSegmentMatch !== null
+          ? 1
+          : geometricSegmentMatch !== null
+          ? 2
+          : 3;
 
       const stopsWithStatus: StopOnRoute[] = stops.map((s, i) => ({
         ...s,

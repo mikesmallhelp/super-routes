@@ -4,43 +4,77 @@ import useSWR from "swr";
 import type { Connection, SavedTrip, VehicleFilterMode } from "@/lib/types";
 
 const REFRESH_INTERVAL_MS = 30_000;
+const PAST_OFFSETS_MINUTES = [120, 90, 60, 30];
+const PAST_NUM_ITINERARIES = 30;
 
 interface RoutesResponse {
   connections: Connection[];
 }
 
-async function fetchTripRoutes(trip: SavedTrip): Promise<{ current: Connection[]; past: Connection[] }> {
-  // Fetch current routes and past routes (90 min ago) in parallel
-  const pastTime = new Date(Date.now() - 90 * 60 * 1000).toISOString();
+function connectionKey(connection: Connection): string {
+  const legs = connection.legs
+    .map((leg) =>
+      [
+        leg.mode,
+        leg.trip?.routeShortName ?? "",
+        leg.trip?.tripHeadsign ?? "",
+        leg.start.scheduledTime,
+        leg.end.scheduledTime,
+        leg.from.stop?.code ?? leg.from.name,
+        leg.to.stop?.code ?? leg.to.name,
+      ].join("|")
+    )
+    .join("::");
+  return `${connection.start}|${connection.end}|${legs}`;
+}
 
-  const [currentRes, pastRes] = await Promise.all([
-    fetch("/api/routes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        origin: trip.originCoords,
-        destination: trip.destinationCoords,
-        numItineraries: 5,
-      }),
+function dedupeConnections(connections: Connection[]): Connection[] {
+  const seen = new Set<string>();
+  const unique: Connection[] = [];
+  for (const connection of connections) {
+    const key = connectionKey(connection);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(connection);
+  }
+  return unique;
+}
+
+async function fetchRoutesAt(
+  trip: SavedTrip,
+  numItineraries: number,
+  dateTime?: string
+): Promise<Connection[]> {
+  const res = await fetch("/api/routes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      origin: trip.originCoords,
+      destination: trip.destinationCoords,
+      numItineraries,
+      ...(dateTime ? { dateTime } : {}),
     }),
-    fetch("/api/routes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        origin: trip.originCoords,
-        destination: trip.destinationCoords,
-        numItineraries: 20,
-        dateTime: pastTime,
-      }),
-    }),
+  });
+  if (!res.ok) throw new Error("Failed to fetch routes");
+  const data: RoutesResponse = await res.json();
+  return data.connections;
+}
+
+async function fetchTripRoutes(trip: SavedTrip): Promise<{ current: Connection[]; past: Connection[] }> {
+  // Fetch current routes and multiple historical snapshots in parallel.
+  // Historical snapshots improve active-leg detection when transit legs started earlier.
+  const pastTimes = PAST_OFFSETS_MINUTES.map(
+    (offsetMin) => new Date(Date.now() - offsetMin * 60 * 1000).toISOString()
+  );
+
+  const [currentConnections, ...pastBatches] = await Promise.all([
+    fetchRoutesAt(trip, 10),
+    ...pastTimes.map((pastTime) => fetchRoutesAt(trip, PAST_NUM_ITINERARIES, pastTime)),
   ]);
 
-  if (!currentRes.ok) throw new Error("Failed to fetch routes");
+  const pastConnections = dedupeConnections(pastBatches.flat());
 
-  const currentData: RoutesResponse = await currentRes.json();
-  const pastData: RoutesResponse = pastRes.ok ? await pastRes.json() : { connections: [] };
-
-  return { current: currentData.connections, past: pastData.connections };
+  return { current: currentConnections, past: pastConnections };
 }
 
 function filterConnections(

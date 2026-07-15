@@ -15,6 +15,8 @@ interface FeedVehicle {
   longitude: number;
 }
 
+const LOCKED_VEHICLE_MAX_DISTANCE_FROM_CORRIDOR_M = 600;
+
 function isTransitLeg(leg: Leg): boolean {
   return leg.mode !== "WALK" && !!leg.trip;
 }
@@ -41,6 +43,36 @@ function legGoesFromFirstToLast(leg: Leg, firstCode: string, lastCode: string): 
 
 function normalizeVehicleId(vehicleId: string): string {
   return vehicleId.startsWith("HSL:") ? vehicleId.slice(4) : vehicleId;
+}
+
+function projectToMeters(lat: number, lon: number, refLat: number) {
+  const metersPerDegLat = 111_320;
+  const metersPerDegLon = Math.cos((refLat * Math.PI) / 180) * 111_320;
+  return { x: lon * metersPerDegLon, y: lat * metersPerDegLat };
+}
+
+function distanceToSegmentMeters(
+  pointLat: number,
+  pointLon: number,
+  startLat: number,
+  startLon: number,
+  endLat: number,
+  endLon: number
+): number {
+  const refLat = (pointLat + startLat + endLat) / 3;
+  const p = projectToMeters(pointLat, pointLon, refLat);
+  const a = projectToMeters(startLat, startLon, refLat);
+  const b = projectToMeters(endLat, endLon, refLat);
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const abLenSq = abx * abx + aby * aby;
+  if (abLenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const apx = p.x - a.x;
+  const apy = p.y - a.y;
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLenSq));
+  const closestX = a.x + t * abx;
+  const closestY = a.y + t * aby;
+  return Math.hypot(p.x - closestX, p.y - closestY);
 }
 
 async function fetchRealtimeVehicles(): Promise<FeedVehicle[]> {
@@ -120,8 +152,12 @@ function collectDirectionalCandidates(
   connections: Connection[],
   firstCode: string,
   lastCode: string
-): Set<string> {
-  const vehicleIds = new Set<string>();
+): string[] {
+  const byVehicleId = new Map<
+    string,
+    { inProgress: boolean; timeDistanceMs: number }
+  >();
+  const nowMs = Date.now();
 
   for (const connection of connections) {
     for (const leg of connection.legs) {
@@ -129,20 +165,60 @@ function collectDirectionalCandidates(
       if (!legGoesFromFirstToLast(leg, firstCode, lastCode)) continue;
 
       const vehicleId = leg.trip?.vehiclePosition?.vehicleId;
-      if (vehicleId) vehicleIds.add(normalizeVehicleId(vehicleId));
+      if (!vehicleId) continue;
+
+      const normalizedId = normalizeVehicleId(vehicleId);
+      const startMs = new Date(
+        leg.start.estimated?.time ?? leg.start.scheduledTime
+      ).getTime();
+      const endMs = new Date(
+        leg.end.estimated?.time ?? leg.end.scheduledTime
+      ).getTime();
+      const inProgress = nowMs >= startMs && nowMs <= endMs;
+      const timeDistanceMs = inProgress
+        ? 0
+        : Math.min(Math.abs(nowMs - startMs), Math.abs(nowMs - endMs));
+
+      const previous = byVehicleId.get(normalizedId);
+      if (
+        !previous ||
+        (inProgress && !previous.inProgress) ||
+        (inProgress === previous.inProgress &&
+          timeDistanceMs < previous.timeDistanceMs)
+      ) {
+        byVehicleId.set(normalizedId, { inProgress, timeDistanceMs });
+      }
     }
   }
 
-  return vehicleIds;
+  return [...byVehicleId.entries()]
+    .filter(([, candidate]) => candidate.inProgress)
+    .sort((a, b) => {
+      return a[1].timeDistanceMs - b[1].timeDistanceMs;
+    })
+    .map(([vehicleId]) => vehicleId);
 }
 
 function findVehicleByLockedId(
   feedVehicles: FeedVehicle[],
-  lockedVehicleId: string
+  lockedVehicleId: string,
+  corridorStart: { lat: number; lon: number },
+  corridorEnd: { lat: number; lon: number }
 ): VehicleMatch | null {
   const normalized = normalizeVehicleId(lockedVehicleId);
   const found = feedVehicles.find((vehicle) => vehicle.vehicleId === normalized);
   if (!found) return null;
+  const distanceFromCorridor = distanceToSegmentMeters(
+    found.latitude,
+    found.longitude,
+    corridorStart.lat,
+    corridorStart.lon,
+    corridorEnd.lat,
+    corridorEnd.lon
+  );
+  if (distanceFromCorridor > LOCKED_VEHICLE_MAX_DISTANCE_FROM_CORRIDOR_M) {
+    return null;
+  }
   return {
     latitude: found.latitude,
     longitude: found.longitude,
@@ -152,10 +228,14 @@ function findVehicleByLockedId(
 
 function findVehicleByCandidates(
   feedVehicles: FeedVehicle[],
-  candidateVehicleIds: Set<string>
+  candidateVehicleIds: string[]
 ): VehicleMatch | null {
-  for (const vehicle of feedVehicles) {
-    if (candidateVehicleIds.has(vehicle.vehicleId)) {
+  const feedByVehicleId = new Map(
+    feedVehicles.map((vehicle) => [vehicle.vehicleId, vehicle])
+  );
+  for (const candidateVehicleId of candidateVehicleIds) {
+    const vehicle = feedByVehicleId.get(candidateVehicleId);
+    if (vehicle) {
       return {
         latitude: vehicle.latitude,
         longitude: vehicle.longitude,
@@ -187,8 +267,31 @@ export async function GET(request: NextRequest) {
     } else {
       let vehicle: VehicleMatch | null = null;
       if (lockedVehicleId) {
-        const feedVehicles = await fetchRealtimeVehicles();
-        vehicle = findVehicleByLockedId(feedVehicles, lockedVehicleId);
+        const [connections, feedVehicles] = await Promise.all([
+          fetchVehicleSearchConnections(firstStop, lastStop),
+          fetchRealtimeVehicles(),
+        ]);
+        const candidateVehicleIds = collectDirectionalCandidates(
+          connections,
+          vehicleStopFirst,
+          vehicleStopLast
+        );
+        if (candidateVehicleIds.includes(normalizeVehicleId(lockedVehicleId))) {
+          vehicle = findVehicleByLockedId(
+            feedVehicles,
+            lockedVehicleId,
+            { lat: firstStop.lat, lon: firstStop.lon },
+            { lat: lastStop.lat, lon: lastStop.lon }
+          );
+        }
+        if (!vehicle) {
+          vehicle = findVehicleByCandidates(feedVehicles, candidateVehicleIds);
+          if (vehicle) {
+            console.log(
+              `[Mock] Replaced stale locked vehicle ${lockedVehicleId} with ${vehicle.vehicleId}`
+            );
+          }
+        }
       } else {
         const [connections, feedVehicles] = await Promise.all([
           fetchVehicleSearchConnections(firstStop, lastStop),
@@ -212,7 +315,7 @@ export async function GET(request: NextRequest) {
       }
       if (lockedVehicleId) {
         console.error(
-          `[Mock] Locked vehicle ${lockedVehicleId} not found in current routing feed snapshot.`
+          `[Mock] Locked vehicle ${lockedVehicleId} not found and no replacement candidate was available.`
         );
         return NextResponse.json({ enabled: false });
       }

@@ -48,7 +48,10 @@ class MockService {
         return null;
       }
       const payload = (await res.json()) as MockPositionResponse;
-      if (!payload.enabled) return null;
+      if (!payload.enabled) {
+        this.lockedVehicleId = null;
+        return null;
+      }
 
       if (payload.mode === "vehicle") {
         if (this.lockedVehicleId !== payload.vehicleId) {
@@ -58,6 +61,7 @@ class MockService {
         return { latitude: payload.latitude, longitude: payload.longitude };
       }
 
+      this.lockedVehicleId = null;
       return { latitude: payload.latitude, longitude: payload.longitude };
     } catch (e) {
       console.error("[Mock] Failed to fetch mock user position:", e);
