@@ -10,7 +10,7 @@ import { UpcomingTripCard } from "./upcoming-trip-card";
 import { LegCard } from "./leg-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { detectJourneyState } from "@/lib/route-detection";
+import { detectActiveLeg, detectJourneyState } from "@/lib/route-detection";
 import { useGeolocation } from "@/hooks/use-geolocation";
 
 interface LiveTripCardProps {
@@ -46,18 +46,39 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
   const hasExcluded = (trip.excludedVehicles ?? []).length > 0;
   const mode = trip.vehicleFilterMode ?? "and";
   const userPos = useGeolocation();
+  const strictDetectionConnections = useMemo(
+    () => [...pastConnections, ...connections],
+    [connections, pastConnections]
+  );
 
-  const journeyState = useMemo(() => {
-    if (!userPos || detectionConnections.length === 0) return null;
-    return detectJourneyState(detectionConnections, userPos.latitude, userPos.longitude);
-  }, [detectionConnections, userPos]);
+  const { journeyState, journeyConnections } = useMemo(() => {
+    if (!userPos || detectionConnections.length === 0) {
+      return { journeyState: null, journeyConnections: detectionConnections };
+    }
+    const activeLeg = detectActiveLeg(
+      detectionConnections,
+      userPos.latitude,
+      userPos.longitude
+    );
+    const journeyConnections = activeLeg
+      ? detectionConnections
+      : strictDetectionConnections;
+    return {
+      journeyState: detectJourneyState(
+        journeyConnections,
+        userPos.latitude,
+        userPos.longitude
+      ),
+      journeyConnections,
+    };
+  }, [detectionConnections, strictDetectionConnections, userPos]);
 
   useEffect(() => {
     onJourneyStateChange(trip.id, journeyState?.matchDistance ?? null);
   }, [onJourneyStateChange, trip.id, journeyState]);
 
   const activeConnection =
-    journeyState ? detectionConnections[journeyState.connectionIndex] : null;
+    journeyState ? journeyConnections[journeyState.connectionIndex] : null;
 
   const preferredLayoutConnection = useMemo(() => {
     if (
