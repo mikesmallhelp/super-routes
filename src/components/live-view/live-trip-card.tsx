@@ -217,6 +217,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
             <StopList
               activeLeg={journeyState.activeLeg}
               endStopCode={layout.activeLegEndStopCode}
+              position={userPos}
             />
           )}
           {journeyState.mode === "arrived" && (

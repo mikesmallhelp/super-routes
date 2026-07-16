@@ -17,7 +17,18 @@ type VisibleEntry =
   | { type: "stop"; stop: StopOnRoute; index: number }
   | { type: "gap"; hiddenCount: number; section: "passed" | "upcoming" };
 
-const lockedStopIndices = new Map<string, number>();
+interface UserPosition {
+  latitude: number;
+  longitude: number;
+}
+
+interface StopHighlight {
+  index: number;
+  approaching: boolean;
+}
+
+const AT_STOP_DISTANCE_M = 80;
+const lockedStopHighlights = new Map<string, StopHighlight>();
 
 function getLegKey(activeLeg: ActiveLeg): string {
   const { leg } = activeLeg;
@@ -28,16 +39,84 @@ function getLegKey(activeLeg: ActiveLeg): string {
   ].join("|");
 }
 
-function lockStopIndex(candidateIndex: number, legKey: string): number {
-  const previousIndex = lockedStopIndices.get(legKey);
-  if (previousIndex === undefined) {
-    lockedStopIndices.set(legKey, candidateIndex);
-    return candidateIndex;
+function getSegmentProgress(
+  start: StopOnRoute,
+  end: StopOnRoute,
+  position: UserPosition
+): { progress: number; distanceToEnd: number } {
+  const metersPerDegreeLatitude = 111_320;
+  const metersPerDegreeLongitude =
+    Math.cos((start.lat * Math.PI) / 180) * metersPerDegreeLatitude;
+  const segmentX = (end.lon - start.lon) * metersPerDegreeLongitude;
+  const segmentY = (end.lat - start.lat) * metersPerDegreeLatitude;
+  const positionX = (position.longitude - start.lon) * metersPerDegreeLongitude;
+  const positionY = (position.latitude - start.lat) * metersPerDegreeLatitude;
+  const segmentLengthSquared = segmentX ** 2 + segmentY ** 2;
+  const progress =
+    segmentLengthSquared === 0
+      ? 0
+      : Math.max(
+          0,
+          Math.min(1, (positionX * segmentX + positionY * segmentY) / segmentLengthSquared)
+        );
+  const distanceToEnd = Math.hypot(positionX - segmentX, positionY - segmentY);
+
+  return { progress, distanceToEnd };
+}
+
+function resolveStopHighlight(
+  stops: StopOnRoute[],
+  detectedIndex: number,
+  position: UserPosition | null
+): StopHighlight {
+  if (!position || stops.length < 2) {
+    return { index: detectedIndex, approaching: false };
   }
 
-  const lockedIndex = Math.max(previousIndex, candidateIndex);
-  lockedStopIndices.set(legKey, lockedIndex);
-  return lockedIndex;
+  let closestSegment: { index: number; progress: number; distanceToEnd: number; distance: number } | null = null;
+  for (let index = 0; index < stops.length - 1; index++) {
+    const { progress, distanceToEnd } = getSegmentProgress(stops[index], stops[index + 1], position);
+    const segmentStart = stops[index];
+    const metersPerDegreeLatitude = 111_320;
+    const metersPerDegreeLongitude =
+      Math.cos((segmentStart.lat * Math.PI) / 180) * metersPerDegreeLatitude;
+    const pointX = (position.longitude - segmentStart.lon) * metersPerDegreeLongitude;
+    const pointY = (position.latitude - segmentStart.lat) * metersPerDegreeLatitude;
+    const segmentX = (stops[index + 1].lon - segmentStart.lon) * metersPerDegreeLongitude;
+    const segmentY = (stops[index + 1].lat - segmentStart.lat) * metersPerDegreeLatitude;
+    const nearestX = segmentX * progress;
+    const nearestY = segmentY * progress;
+    const distance = Math.hypot(pointX - nearestX, pointY - nearestY);
+
+    if (!closestSegment || distance < closestSegment.distance) {
+      closestSegment = { index, progress, distanceToEnd, distance };
+    }
+  }
+
+  if (!closestSegment) return { index: detectedIndex, approaching: false };
+  if (closestSegment.progress < 0.5) {
+    return { index: closestSegment.index, approaching: false };
+  }
+
+  return {
+    index: closestSegment.index + 1,
+    approaching: closestSegment.distanceToEnd > AT_STOP_DISTANCE_M,
+  };
+}
+
+function lockStopHighlight(candidate: StopHighlight, legKey: string): StopHighlight {
+  const previous = lockedStopHighlights.get(legKey);
+  if (!previous || candidate.index > previous.index) {
+    lockedStopHighlights.set(legKey, candidate);
+    return candidate;
+  }
+
+  if (candidate.index === previous.index && previous.approaching && !candidate.approaching) {
+    lockedStopHighlights.set(legKey, candidate);
+    return candidate;
+  }
+
+  return previous;
 }
 
 /**
@@ -86,9 +165,10 @@ function buildVisibleEntries(stops: StopOnRoute[], currentIdx: number): VisibleE
 interface StopListProps {
   activeLeg: ActiveLeg;
   endStopCode?: string;
+  position: UserPosition | null;
 }
 
-export function StopList({ activeLeg, endStopCode }: StopListProps) {
+export function StopList({ activeLeg, endStopCode, position }: StopListProps) {
   const { leg, stops: allStops } = activeLeg;
   const shortName = leg.trip?.routeShortName;
   const headsign = leg.trip?.tripHeadsign;
@@ -99,7 +179,11 @@ export function StopList({ activeLeg, endStopCode }: StopListProps) {
     : -1;
   const stops =
     endStopIndex >= detectedIndex ? allStops.slice(0, endStopIndex + 1) : allStops;
-  const currentIndex = Math.min(lockStopIndex(detectedIndex, legKey), stops.length - 1);
+  const highlight = lockStopHighlight(
+    resolveStopHighlight(stops, detectedIndex, position),
+    legKey
+  );
+  const currentIndex = Math.min(highlight.index, stops.length - 1);
 
   const entries = buildVisibleEntries(stops, currentIndex);
   const currentStop = stops[currentIndex];
@@ -183,6 +267,7 @@ export function StopList({ activeLeg, endStopCode }: StopListProps) {
                   : index === currentIndex
                   ? "current"
                   : "upcoming";
+              const isApproaching = index === currentIndex && highlight.approaching;
               return (
                 <div
                   key={`stop-${index}`}
@@ -192,7 +277,9 @@ export function StopList({ activeLeg, endStopCode }: StopListProps) {
                 >
                   <div
                     className={`w-3 h-3 rounded-full border-2 shrink-0 z-10 ${
-                      visualStatus === "current"
+                      isApproaching
+                        ? "stop-approaching-dot"
+                        : visualStatus === "current"
                         ? "bg-green-500 border-green-600 ring-2 ring-green-300"
                         : visualStatus === "passed"
                         ? "bg-muted-foreground border-muted-foreground"
