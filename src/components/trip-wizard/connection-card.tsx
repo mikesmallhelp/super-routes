@@ -3,24 +3,14 @@
 import type { Connection } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Footprints } from "lucide-react";
+import { VehicleIcon } from "@/components/vehicle-icon";
 
 function formatTime(isoString: string) {
   return new Date(isoString).toLocaleTimeString("fi-FI", {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function modeIcon(mode: string) {
-  switch (mode) {
-    case "WALK": return "🚶";
-    case "BUS": return "🚌";
-    case "TRAM": return "🚃";
-    case "RAIL": return "🚆";
-    case "SUBWAY": return "🚇";
-    case "FERRY": return "⛴️";
-    default: return "🚍";
-  }
 }
 
 interface ConnectionCardProps {
@@ -53,7 +43,7 @@ export function ConnectionCard({
 
               return (
                 <div key={i} className="flex items-center gap-2 text-muted-foreground text-sm py-1">
-                  <span>{modeIcon("WALK")}</span>
+                  <Footprints aria-hidden="true" className="size-4 rotate-90" />
                   <span className="flex-1">
                     {i === 0 && walkFrom}
                     {i === 0 ? " → " : ""}
@@ -71,7 +61,7 @@ export function ConnectionCard({
             return (
               <div key={i} className="space-y-0.5">
                 <div className="flex items-center gap-2 text-sm py-0.5">
-                  <span>{modeIcon(leg.mode)}</span>
+                  <VehicleIcon mode={leg.mode} />
                   <span className="font-medium truncate">
                     {leg.from.stop?.code || leg.from.name} {leg.from.stop?.name || leg.from.name}
                   </span>

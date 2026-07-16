@@ -7,23 +7,13 @@ import { buildStopList } from "@/lib/route-detection";
 import { usePreviousDeparture } from "@/hooks/use-previous-departure";
 import { useNow } from "@/hooks/use-now";
 import { useStopDepartures } from "@/hooks/use-stop-departures";
+import { VehicleIcon } from "@/components/vehicle-icon";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fi-FI", {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function modeIcon(mode: string) {
-  switch (mode) {
-    case "BUS": return "🚌";
-    case "TRAM": return "🚃";
-    case "RAIL": return "🚆";
-    case "SUBWAY": return "🚇";
-    case "FERRY": return "⛴️";
-    default: return "🚍";
-  }
 }
 
 interface UpcomingTripCardProps {
@@ -113,7 +103,7 @@ export function UpcomingTripCard({
         )}
 
         <div className="flex items-center gap-2 mb-2">
-          <span>{modeIcon(leg.mode)}</span>
+          <VehicleIcon mode={leg.mode} />
           {shortName && (
             <Badge variant="secondary" className="text-sm font-bold">
               {shortName}

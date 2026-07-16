@@ -6,17 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useStopDepartures } from "@/hooks/use-stop-departures";
 import { useNow } from "@/hooks/use-now";
-
-function modeIcon(mode: string) {
-  switch (mode) {
-    case "BUS": return "🚌";
-    case "TRAM": return "🚃";
-    case "RAIL": return "🚆";
-    case "SUBWAY": return "🚇";
-    case "FERRY": return "⛴️";
-    default: return "🚍";
-  }
-}
+import { VehicleIcon } from "@/components/vehicle-icon";
 
 interface UpcomingArrivalsProps {
   arrivals: UpcomingArrival[];
@@ -89,7 +79,7 @@ export function UpcomingArrivals({
                   a.delaySeconds !== undefined ? Math.round(a.delaySeconds / 60) : null;
                 return (
                   <div key={i} className="flex items-center gap-2 text-sm">
-                    <span>{modeIcon(a.mode)}</span>
+                    <VehicleIcon mode={a.mode} />
                     <Badge variant="secondary" className="text-xs">
                       {a.routeShortName}
                     </Badge>

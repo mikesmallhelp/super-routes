@@ -4,23 +4,13 @@ import type { ActiveLeg } from "@/lib/route-detection";
 import type { StopOnRoute } from "@/lib/route-detection";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { VehicleIcon } from "@/components/vehicle-icon";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fi-FI", {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function modeIcon(mode: string) {
-  switch (mode) {
-    case "BUS": return "🚌";
-    case "TRAM": return "🚃";
-    case "RAIL": return "🚆";
-    case "SUBWAY": return "🚇";
-    case "FERRY": return "⛴️";
-    default: return "🚍";
-  }
 }
 
 type VisibleEntry =
@@ -138,7 +128,7 @@ export function StopList({ activeLeg, endStopCode }: StopListProps) {
       <CardContent className="p-4">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <span>{modeIcon(leg.mode)}</span>
+            <VehicleIcon mode={leg.mode} />
             {shortName && (
               <Badge variant="secondary" className="shrink-0 text-sm font-bold">
                 {shortName}

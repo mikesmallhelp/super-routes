@@ -3,24 +3,14 @@
 import type { Leg } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Footprints } from "lucide-react";
+import { VehicleIcon } from "@/components/vehicle-icon";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fi-FI", {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function modeIcon(mode: string) {
-  switch (mode) {
-    case "WALK": return "🚶";
-    case "BUS": return "🚌";
-    case "TRAM": return "🚃";
-    case "RAIL": return "🚆";
-    case "SUBWAY": return "🚇";
-    case "FERRY": return "⛴️";
-    default: return "🚍";
-  }
 }
 
 function legLabel(leg: Leg): string {
@@ -52,7 +42,11 @@ export function LegCard({ leg, variant }: LegCardProps) {
       <CardContent className="p-3">
         <div className="flex items-center gap-2">
           <span className={isPast ? "grayscale opacity-60" : ""}>
-            {modeIcon(leg.mode)}
+            {leg.mode === "WALK" ? (
+              <Footprints aria-hidden="true" className="size-4 rotate-90" />
+            ) : (
+              <VehicleIcon mode={leg.mode} />
+            )}
           </span>
           {shortName && (
             <Badge
