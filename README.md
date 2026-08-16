@@ -1,11 +1,12 @@
 # Super Routes
 
-A public transport route planner for the HSL area (Helsinki region). Save your favorite routes and monitor real-time connections sorted by your current location.
+A public transport route planner for the HSL area (Helsinki region). Save your favorite routes, monitor real-time connections sorted by your current location, and follow journey progress while travelling on public transport.
 
 ![](doc/picture1.png)
 ![](doc/picture2.png)
 ![](doc/picture3.png)
 ![](doc/picture4.png)
+![](doc/picture5.png)
 
 ## Tech stack
 
@@ -41,7 +42,7 @@ AUTH_SECRET=your_nextauth_secret
 4. Create an **OAuth 2.0 Client ID** (type: Web application)
 5. Add **Authorized JavaScript origins**: `http://localhost:3000` (and your production URL)
 5. Add **Authorized redirect URIs**: `http://localhost:3000/api/auth/callback/google` (and your production URL)
-6. Copy the Client ID and Client Secret to `.env.local`
+6. Copy the Client ID and Client Secret to `.env.local` and to your secrects in the production environment
 
 Generate `AUTH_SECRET` with:
 
@@ -66,9 +67,19 @@ npm run dev
 
 The app starts at http://localhost:3000.
 
-For local development you can also enable the built-in mock journey flow with `NEXT_PUBLIC_USE_MOCK_DATA=true` in `.env.local`. This is useful for testing location-based tracking and transfer states without live Digitransit data. `NEXT_PUBLIC_MOCK_INTERVAL_MS` controls how long each mock scenario stays active before advancing automatically. The yellow buttons in the live view let you pause the mock flow and step through the journey one phase at a time.
+### Mock location
 
-![](doc/dev-picture1.png)
+For local development, mock the user's location in the
+`.env.local` file:
+
+```env
+# Keep the user's location fixed at one stop.
+NEXT_PUBLIC_MOCK_STOP=E6311
+
+# Or follow a live vehicle travelling from the first stop to the last stop.
+NEXT_PUBLIC_MOCK_VEHICLE_STOP_FIRST=E6311
+NEXT_PUBLIC_MOCK_VEHICLE_STOP_LAST=V1307
+```
 
 ## Production deployment
 
