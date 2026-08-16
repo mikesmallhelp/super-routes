@@ -291,6 +291,52 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
       continuation.legs[0]?.mode === "WALK" && continuation.legs.length > 1 ? 1 : 0
     ) ?? [];
   const hasContinuationTransit = continuationLegs.some((leg) => leg.mode !== "WALK");
+  const activeStopCode = journeyState?.activeLeg?.stops.find(
+    (stop) => stop.status === "current"
+  )?.code;
+  const isAtTransferStop =
+    journeyState?.mode === "on-vehicle" &&
+    !!layout?.activeLegEndStopCode &&
+    activeStopCode === layout.activeLegEndStopCode;
+  const isWaitingAtActiveStop =
+    !!stopArrival &&
+    stopArrival.routeShortName === journeyState?.activeLeg?.leg.trip?.routeShortName &&
+    stopArrival.stopCode === activeStopCode;
+  const fallbackUpcomingLeg = useMemo(() => {
+    if (!fallbackArrival) return null;
+
+    return (
+      connections
+        .flatMap((connection) => connection.legs)
+        .find(
+          (leg) =>
+            leg.trip?.routeShortName === fallbackArrival.routeShortName &&
+            leg.from.stop?.code === fallbackArrival.stopCode &&
+            leg.start.scheduledTime === fallbackArrival.scheduledTime
+        ) ?? null
+    );
+  }, [connections, fallbackArrival]);
+  const fallbackWaitingRoute = (() => {
+    if (!fallbackArrival) return null;
+
+    for (const connection of connections) {
+      const legIndex = connection.legs.findIndex(
+        (leg) =>
+          leg.trip?.routeShortName === fallbackArrival.routeShortName &&
+          leg.from.stop?.code === fallbackArrival.stopCode &&
+          leg.start.scheduledTime === fallbackArrival.scheduledTime
+      );
+      if (legIndex >= 0) return { connection, legIndex };
+    }
+
+    return null;
+  })();
+  const isFallbackWaitingRoute =
+    !!fallbackArrival &&
+    !!fallbackWaitingRoute &&
+    (journeyState?.mode !== "waiting" ||
+      journeyState.upcomingArrival?.routeShortName !== fallbackArrival.routeShortName ||
+      journeyState.upcomingArrival?.stopCode !== fallbackArrival.stopCode);
 
   return (
     <div className="space-y-3">
@@ -339,13 +385,26 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
 
       {isExpanded && journeyState && activeConnection && layout ? (
         <div className="space-y-2">
-          {journeyState.mode === "on-vehicle" && journeyState.activeLeg && (
+          {stopArrival && (
+            <UpcomingArrivals
+              arrivals={[stopArrival]}
+              stopGtfsId={stopArrival.stopGtfsId}
+              includeRoutes={[stopArrival.routeShortName]}
+              excludeRoutes={trip.excludedVehicles ?? []}
+              headsign={stopArrival.headsign}
+            />
+          )}
+          {journeyState.mode === "on-vehicle" &&
+            journeyState.activeLeg &&
+            !isFallbackWaitingRoute && (
             <>
-              <StopList
-                activeLeg={journeyState.activeLeg}
-                endStopCode={layout.activeLegEndStopCode}
-                position={userPos}
-              />
+              {!isAtTransferStop && !isWaitingAtActiveStop && (
+                <StopList
+                  activeLeg={journeyState.activeLeg}
+                  endStopCode={layout.activeLegEndStopCode}
+                  position={userPos}
+                />
+              )}
               {isContinuationLoading && !hasContinuationTransit && (
                 <p className="text-sm text-muted-foreground">
                   Päivitetään jatkoyhteyksiä...
@@ -367,28 +426,65 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
                     leg.mode === "WALK" ? (
                       <LegCard key={`continuation-${index}`} leg={leg} variant="future" />
                     ) : (
-                      <UpcomingTripCard key={`continuation-${index}`} leg={leg} />
+                      <UpcomingTripCard
+                        key={`continuation-${index}`}
+                        leg={leg}
+                        syncFromStop={{
+                          stopGtfsId: leg.from.stop?.gtfsId,
+                          includeRoutes: leg.trip?.routeShortName
+                            ? [leg.trip.routeShortName]
+                            : [],
+                          excludeRoutes: trip.excludedVehicles ?? [],
+                          headsign: leg.trip?.tripHeadsign,
+                        }}
+                      />
                     )
                   )}
                 </>
               )}
             </>
           )}
+          {isFallbackWaitingRoute && fallbackArrival && fallbackWaitingRoute && (
+            <>
+              <UpcomingTripCard
+                leg={fallbackWaitingRoute.connection.legs[fallbackWaitingRoute.legIndex]}
+                syncFromStop={{
+                  stopGtfsId: fallbackArrival.stopGtfsId,
+                  includeRoutes: [fallbackArrival.routeShortName],
+                  excludeRoutes: trip.excludedVehicles ?? [],
+                  headsign: fallbackArrival.headsign,
+                }}
+              />
+              {fallbackWaitingRoute.connection.legs
+                .slice(fallbackWaitingRoute.legIndex + 1)
+                .map((leg, index) =>
+                  leg.mode === "WALK" ? (
+                    <LegCard key={`fallback-future-${index}`} leg={leg} variant="future" />
+                  ) : (
+                    <UpcomingTripCard key={`fallback-future-${index}`} leg={leg} />
+                  )
+                )}
+            </>
+          )}
+          {!isFallbackWaitingRoute &&
+            isWaitingAtActiveStop &&
+            fallbackArrival &&
+            fallbackUpcomingLeg && (
+            <UpcomingTripCard
+              leg={fallbackUpcomingLeg}
+              syncFromStop={{
+                stopGtfsId: fallbackArrival.stopGtfsId,
+                includeRoutes: [fallbackArrival.routeShortName],
+                excludeRoutes: trip.excludedVehicles ?? [],
+                headsign: fallbackArrival.headsign,
+              }}
+            />
+          )}
           {journeyState.mode === "arrived" && (
             <ArrivalMessageCard hasRemainingWalk={layout.hasRemainingWalk} />
           )}
-          {stopArrival && (
-            <UpcomingArrivals
-              arrivals={[stopArrival]}
-              stopGtfsId={stopArrival.stopGtfsId}
-              includeRoutes={[stopArrival.routeShortName]}
-              excludeRoutes={trip.excludedVehicles ?? []}
-              headsign={stopArrival.headsign}
-            />
-          )}
-
           {/* The trip user is waiting for (waiting mode) */}
-          {layout.waitingLeg && (
+          {!isFallbackWaitingRoute && layout.waitingLeg && (
             <UpcomingTripCard
               leg={layout.waitingLeg}
               syncFromStop={{
@@ -403,7 +499,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               }}
             />
           )}
-          {waitingFutureLegs.map((leg, index) =>
+          {!isFallbackWaitingRoute && waitingFutureLegs.map((leg, index) =>
             leg.mode === "WALK" ? (
               <LegCard key={`waiting-future-${index}`} leg={leg} variant="future" />
             ) : (
@@ -435,6 +531,17 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               includeRoutes={[fallbackArrival.routeShortName]}
               excludeRoutes={trip.excludedVehicles ?? []}
               headsign={fallbackArrival.headsign}
+            />
+          )}
+          {isExpanded && fallbackArrival && fallbackUpcomingLeg && (
+            <UpcomingTripCard
+              leg={fallbackUpcomingLeg}
+              syncFromStop={{
+                stopGtfsId: fallbackArrival.stopGtfsId,
+                includeRoutes: [fallbackArrival.routeShortName],
+                excludeRoutes: trip.excludedVehicles ?? [],
+                headsign: fallbackArrival.headsign,
+              }}
             />
           )}
           {!isLoading && connections.length === 0 && !error && (
