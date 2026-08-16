@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import type { SavedTrip } from "@/lib/types";
-import { useLiveRoutes } from "@/hooks/use-live-routes";
+import { useLiveContinuation, useLiveRoutes } from "@/hooks/use-live-routes";
 import { ConnectionCard } from "@/components/trip-wizard/connection-card";
 import { StopList } from "./stop-list";
 import { UpcomingArrivals } from "./upcoming-arrivals";
@@ -10,7 +10,11 @@ import { UpcomingTripCard } from "./upcoming-trip-card";
 import { LegCard } from "./leg-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { detectActiveLeg, detectJourneyState } from "@/lib/route-detection";
+import {
+  detectActiveLeg,
+  detectJourneyState,
+  findUpcomingArrivals,
+} from "@/lib/route-detection";
 import { useGeolocation } from "@/hooks/use-geolocation";
 
 interface LiveTripCardProps {
@@ -50,8 +54,19 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
     () => [...pastConnections, ...connections],
     [connections, pastConnections]
   );
+  const fallbackArrival = useMemo(() => {
+    if (!userPos || connections.length === 0) return null;
+    return findUpcomingArrivals(
+      connections,
+      userPos.latitude,
+      userPos.longitude
+    )[0] ?? null;
+  }, [connections, userPos]);
 
-  const { journeyState, journeyConnections } = useMemo(() => {
+  const {
+    journeyState: initialJourneyState,
+    journeyConnections: initialJourneyConnections,
+  } = useMemo(() => {
     if (!userPos || detectionConnections.length === 0) {
       return { journeyState: null, journeyConnections: detectionConnections };
     }
@@ -73,24 +88,21 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
     };
   }, [detectionConnections, strictDetectionConnections, userPos]);
 
-  useEffect(() => {
-    onJourneyStateChange(trip.id, journeyState?.matchDistance ?? null);
-  }, [onJourneyStateChange, trip.id, journeyState]);
-
-  const activeConnection =
-    journeyState ? journeyConnections[journeyState.connectionIndex] : null;
-
+  const initialActiveConnection =
+    initialJourneyState
+      ? initialJourneyConnections[initialJourneyState.connectionIndex]
+      : null;
   const preferredLayoutConnection = useMemo(() => {
     if (
-      !journeyState ||
-      journeyState.mode !== "on-vehicle" ||
-      !activeConnection ||
+      !initialJourneyState ||
+      initialJourneyState.mode !== "on-vehicle" ||
+      !initialActiveConnection ||
       trip.selectedVehicles.length === 0
     ) {
       return null;
     }
 
-    const activeLeg = activeConnection.legs[journeyState.legIndex];
+    const activeLeg = initialActiveConnection.legs[initialJourneyState.legIndex];
     const activeRoute = activeLeg.trip?.routeShortName;
     if (!activeRoute) return null;
 
@@ -121,7 +133,111 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
     });
 
     return candidates[0] ?? null;
-  }, [activeConnection, connections, journeyState, pastConnections, trip.selectedVehicles.length]);
+  }, [
+    initialActiveConnection,
+    connections,
+    initialJourneyState,
+    pastConnections,
+    trip.selectedVehicles.length,
+  ]);
+  const completedVehicles = useMemo(() => {
+    if (
+      !initialJourneyState ||
+      initialJourneyState.mode !== "on-vehicle" ||
+      !initialActiveConnection
+    ) {
+      return [];
+    }
+
+    return initialActiveConnection.legs
+      .slice(0, initialJourneyState.legIndex + 1)
+      .flatMap((leg) => (leg.trip?.routeShortName ? [leg.trip.routeShortName] : []));
+  }, [initialActiveConnection, initialJourneyState]);
+  const continuationStart = useMemo(() => {
+    if (
+      !initialJourneyState ||
+      initialJourneyState.mode !== "on-vehicle" ||
+      !initialActiveConnection
+    ) {
+      return null;
+    }
+
+    const activeLeg =
+      preferredLayoutConnection?.connection.legs[preferredLayoutConnection.legIndex] ??
+      initialActiveConnection.legs[initialJourneyState.legIndex];
+    return {
+      origin: {
+        latitude: activeLeg.to.lat,
+        longitude: activeLeg.to.lon,
+      },
+      dateTime: activeLeg.end.estimated?.time ?? activeLeg.end.scheduledTime,
+    };
+  }, [initialActiveConnection, initialJourneyState, preferredLayoutConnection]);
+  const {
+    connections: continuationConnections,
+    detectionConnections: continuationDetectionConnections,
+    error: continuationError,
+    isLoading: isContinuationLoading,
+    hasLoaded: hasLoadedContinuation,
+  } = useLiveContinuation(
+    trip,
+    continuationStart?.origin ?? null,
+    completedVehicles,
+    continuationStart?.dateTime ?? null
+  );
+  const { journeyState, journeyConnections } = useMemo(() => {
+    if (!userPos) {
+      return {
+        journeyState: initialJourneyState,
+        journeyConnections: initialJourneyConnections,
+      };
+    }
+    if (initialJourneyState?.mode === "waiting") {
+      return {
+        journeyState: initialJourneyState,
+        journeyConnections: initialJourneyConnections,
+      };
+    }
+
+    const detectionCandidates = [
+      ...detectionConnections,
+      ...continuationDetectionConnections,
+    ];
+    const activeLeg = detectActiveLeg(
+      detectionCandidates,
+      userPos.latitude,
+      userPos.longitude
+    );
+    const journeyConnections = activeLeg
+      ? detectionCandidates
+      : strictDetectionConnections;
+    return {
+      journeyState: detectJourneyState(
+        journeyConnections,
+        userPos.latitude,
+        userPos.longitude
+      ),
+      journeyConnections,
+    };
+  }, [
+    continuationDetectionConnections,
+    detectionConnections,
+    initialJourneyConnections,
+    initialJourneyState,
+    strictDetectionConnections,
+    userPos,
+  ]);
+
+  useEffect(() => {
+    onJourneyStateChange(trip.id, journeyState?.matchDistance ?? null);
+  }, [onJourneyStateChange, trip.id, journeyState]);
+
+  const activeConnection =
+    journeyState ? journeyConnections[journeyState.connectionIndex] : null;
+  const stopArrival =
+    journeyState?.mode === "waiting"
+      ? journeyState.upcomingArrival ?? null
+      : fallbackArrival;
 
   // Compute which leg should be rendered as the "upcoming trip card":
   //   - waiting: the leg the user is waiting for (== activeIdx)
@@ -165,6 +281,16 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
       hasRemainingWalk: !!journeyState.remainingWalk,
     };
   }, [journeyState, activeConnection, preferredLayoutConnection]);
+  const continuation = continuationConnections[0] ?? null;
+  const waitingFutureLegs =
+    journeyState?.mode === "waiting" && layout
+      ? layout.futureAfter.slice(layout.futureAfter[0]?.mode === "WALK" ? 1 : 0)
+      : [];
+  const continuationLegs =
+    continuation?.legs.slice(
+      continuation.legs[0]?.mode === "WALK" && continuation.legs.length > 1 ? 1 : 0
+    ) ?? [];
+  const hasContinuationTransit = continuationLegs.some((leg) => leg.mode !== "WALK");
 
   return (
     <div className="space-y-3">
@@ -214,29 +340,52 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
       {isExpanded && journeyState && activeConnection && layout ? (
         <div className="space-y-2">
           {journeyState.mode === "on-vehicle" && journeyState.activeLeg && (
-            <StopList
-              activeLeg={journeyState.activeLeg}
-              endStopCode={layout.activeLegEndStopCode}
-              position={userPos}
-            />
+            <>
+              <StopList
+                activeLeg={journeyState.activeLeg}
+                endStopCode={layout.activeLegEndStopCode}
+                position={userPos}
+              />
+              {isContinuationLoading && !hasContinuationTransit && (
+                <p className="text-sm text-muted-foreground">
+                  Päivitetään jatkoyhteyksiä...
+                </p>
+              )}
+              {continuationError && !hasContinuationTransit && (
+                <p className="text-sm text-destructive">
+                  Jatkoyhteyksien haku epäonnistui.
+                </p>
+              )}
+              {hasLoadedContinuation && !hasContinuationTransit && !continuationError && (
+                <p className="text-sm text-muted-foreground">
+                  Ei valintoihin sopivia jatkoyhteyksiä juuri nyt.
+                </p>
+              )}
+              {hasContinuationTransit && (
+                <>
+                  {continuationLegs.map((leg, index) =>
+                    leg.mode === "WALK" ? (
+                      <LegCard key={`continuation-${index}`} leg={leg} variant="future" />
+                    ) : (
+                      <UpcomingTripCard key={`continuation-${index}`} leg={leg} />
+                    )
+                  )}
+                </>
+              )}
+            </>
           )}
           {journeyState.mode === "arrived" && (
             <ArrivalMessageCard hasRemainingWalk={layout.hasRemainingWalk} />
           )}
-          {journeyState.mode === "waiting" && journeyState.upcomingArrival && (
+          {stopArrival && (
             <UpcomingArrivals
-              arrivals={[journeyState.upcomingArrival]}
-              stopGtfsId={journeyState.upcomingArrival.stopGtfsId}
-              includeRoutes={trip.selectedVehicles}
+              arrivals={[stopArrival]}
+              stopGtfsId={stopArrival.stopGtfsId}
+              includeRoutes={[stopArrival.routeShortName]}
               excludeRoutes={trip.excludedVehicles ?? []}
-              headsign={layout.waitingLeg?.trip?.tripHeadsign ?? journeyState.upcomingArrival.headsign}
+              headsign={stopArrival.headsign}
             />
           )}
-
-          {/* Walk or other legs between the active leg and the next transit */}
-          {layout.futureBefore.map((leg, i) => (
-            <LegCard key={`fb-${i}`} leg={leg} variant="future" />
-          ))}
 
           {/* The trip user is waiting for (waiting mode) */}
           {layout.waitingLeg && (
@@ -254,23 +403,40 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               }}
             />
           )}
+          {waitingFutureLegs.map((leg, index) =>
+            leg.mode === "WALK" ? (
+              <LegCard key={`waiting-future-${index}`} leg={leg} variant="future" />
+            ) : (
+              <UpcomingTripCard key={`waiting-future-${index}`} leg={leg} />
+            )
+          )}
 
-          {/* The next upcoming trip after the current bus (on-vehicle mode) */}
-          {layout.upcomingLeg && (
+          {/* Use the original route only while the current-location query is pending. */}
+          {journeyState.mode === "on-vehicle" && !hasContinuationTransit && layout.futureBefore.map((leg, i) => (
+            <LegCard key={`fb-${i}`} leg={leg} variant="future" />
+          ))}
+          {journeyState.mode === "on-vehicle" && !hasContinuationTransit && layout.upcomingLeg && (
             <UpcomingTripCard
               leg={layout.upcomingLeg}
               showPreviousDeparture
               earliestCatchTime={layout.activeLegEndTime}
             />
           )}
-
-          {/* Legs after the upcoming trip */}
-          {layout.futureAfter.map((leg, i) => (
+          {journeyState.mode === "on-vehicle" && !hasContinuationTransit && layout.futureAfter.map((leg, i) => (
             <LegCard key={`fa-${i}`} leg={leg} variant="future" />
           ))}
         </div>
       ) : (
         <>
+          {isExpanded && fallbackArrival && (
+            <UpcomingArrivals
+              arrivals={[fallbackArrival]}
+              stopGtfsId={fallbackArrival.stopGtfsId}
+              includeRoutes={[fallbackArrival.routeShortName]}
+              excludeRoutes={trip.excludedVehicles ?? []}
+              headsign={fallbackArrival.headsign}
+            />
+          )}
           {!isLoading && connections.length === 0 && !error && (
             <p className="text-sm text-muted-foreground">
               Ei reittivaihtoehtoja juuri nyt.

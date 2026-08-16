@@ -1,16 +1,19 @@
 "use client";
 
 import useSWR from "swr";
-import type { Connection, SavedTrip, VehicleFilterMode } from "@/lib/types";
+import type { Connection, Coordinates, SavedTrip, VehicleFilterMode } from "@/lib/types";
 
 const REFRESH_INTERVAL_MS = 30_000;
 const CURRENT_NUM_ITINERARIES = 20;
+const CONTINUATION_NUM_ITINERARIES = 60;
 const PAST_OFFSETS_MINUTES = [120, 90, 60, 30];
 const PAST_NUM_ITINERARIES = 30;
 
 interface RoutesResponse {
   connections: Connection[];
 }
+
+const continuationDetectionCache = new Map<string, Connection[]>();
 
 function connectionKey(connection: Connection): string {
   const legs = connection.legs
@@ -42,7 +45,8 @@ function dedupeConnections(connections: Connection[]): Connection[] {
 }
 
 async function fetchRoutesAt(
-  trip: SavedTrip,
+  origin: Coordinates,
+  destination: Coordinates,
   numItineraries: number,
   dateTime?: string
 ): Promise<Connection[]> {
@@ -50,8 +54,8 @@ async function fetchRoutesAt(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      origin: trip.originCoords,
-      destination: trip.destinationCoords,
+      origin,
+      destination,
       numItineraries,
       ...(dateTime ? { dateTime } : {}),
     }),
@@ -69,13 +73,44 @@ async function fetchTripRoutes(trip: SavedTrip): Promise<{ current: Connection[]
   );
 
   const [currentConnections, ...pastBatches] = await Promise.all([
-    fetchRoutesAt(trip, CURRENT_NUM_ITINERARIES),
-    ...pastTimes.map((pastTime) => fetchRoutesAt(trip, PAST_NUM_ITINERARIES, pastTime)),
+    fetchRoutesAt(trip.originCoords, trip.destinationCoords, CURRENT_NUM_ITINERARIES),
+    ...pastTimes.map((pastTime) =>
+      fetchRoutesAt(trip.originCoords, trip.destinationCoords, PAST_NUM_ITINERARIES, pastTime)
+    ),
   ]);
 
   const pastConnections = dedupeConnections(pastBatches.flat());
 
   return { current: currentConnections, past: pastConnections };
+}
+
+function getContinuationRequiredVehicles(
+  trip: SavedTrip,
+  completedVehicles: string[]
+): string[] {
+  if ((trip.vehicleFilterMode ?? "and") !== "and") return [];
+  const completed = new Set(completedVehicles);
+  return trip.selectedVehicles.filter((vehicle) => !completed.has(vehicle));
+}
+
+async function fetchContinuationRoutes(
+  origin: Coordinates,
+  trip: SavedTrip,
+  dateTime: string,
+  requiredVehicles: string[]
+): Promise<Connection[]> {
+  const connections = await fetchRoutesAt(
+    origin,
+    trip.destinationCoords,
+    CONTINUATION_NUM_ITINERARIES,
+    dateTime
+  );
+  return filterConnections(
+    connections,
+    requiredVehicles,
+    trip.excludedVehicles ?? [],
+    "and"
+  );
 }
 
 function filterConnections(
@@ -175,5 +210,48 @@ export function useLiveRoutes(trip: SavedTrip) {
     isLoading,
     isValidating,
     mutate,
+  };
+}
+
+export function useLiveContinuation(
+  trip: SavedTrip,
+  origin: Coordinates | null,
+  completedVehicles: string[],
+  dateTime: string | null
+) {
+  const requiredVehicles = getContinuationRequiredVehicles(trip, completedVehicles);
+  const originKey = origin
+    ? `${origin.latitude.toFixed(3)},${origin.longitude.toFixed(3)}`
+    : null;
+  const requiredVehiclesKey = requiredVehicles.join(",");
+  const { data, error, isLoading, isValidating } = useSWR(
+    originKey && dateTime
+      ? `live-continuation-${trip.id}-${originKey}-${dateTime}-${requiredVehiclesKey}`
+      : null,
+    async () => {
+      const connections = await fetchContinuationRoutes(
+        origin!,
+        trip,
+        dateTime!,
+        requiredVehicles
+      );
+      continuationDetectionCache.set(trip.id, connections);
+      return connections;
+    },
+    {
+      refreshInterval: REFRESH_INTERVAL_MS,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    }
+  );
+
+  return {
+    connections: data ?? [],
+    detectionConnections:
+      data ?? continuationDetectionCache.get(trip.id) ?? [],
+    error,
+    isLoading,
+    isValidating,
+    hasLoaded: data !== undefined,
   };
 }

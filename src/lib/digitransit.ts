@@ -3,6 +3,8 @@ import { Coordinates, Connection, Leg, VehiclePosition } from "./types";
 const API_KEY = process.env.DIGITRANSIT_API_KEY!;
 const GEOCODE_URL = "https://api.digitransit.fi/geocoding/v1/search";
 const ROUTING_URL = "https://api.digitransit.fi/routing/v2/hsl/gtfs/v1";
+const HSL_BOUNDARY_RECT =
+  "boundary.rect.min_lat=60.0&boundary.rect.max_lat=60.6&boundary.rect.min_lon=24.0&boundary.rect.max_lon=25.2";
 const MINIMUM_ROUTE_RESULTS = 5;
 const ROUTE_FALLBACK_OFFSETS_MS = [
   30 * 60 * 1000,
@@ -38,7 +40,7 @@ export async function autocompleteAddress(
 ): Promise<{ label: string; lat: number; lon: number }[]> {
   if (!text || text.length < 2) return [];
 
-  const url = `${AUTOCOMPLETE_URL}?text=${encodeURIComponent(text)}&size=20&lang=fi&boundary.rect.min_lat=60.0&boundary.rect.max_lat=60.6&boundary.rect.min_lon=24.0&boundary.rect.max_lon=25.2`;
+  const url = `${AUTOCOMPLETE_URL}?text=${encodeURIComponent(text)}&size=20&lang=fi&${HSL_BOUNDARY_RECT}`;
   log("Autocomplete request", { text, url });
 
   const res = await fetch(url, {
@@ -417,7 +419,8 @@ export async function fetchStopDepartures(
 export async function fetchStopCoordsByCode(
   code: string
 ): Promise<{ lat: number; lon: number; name: string } | null> {
-  const url = `${GEOCODE_URL}?text=${encodeURIComponent(code)}&layers=stop&size=10`;
+  const url =
+    `${GEOCODE_URL}?text=${encodeURIComponent(code)}&layers=stop&size=10&${HSL_BOUNDARY_RECT}`;
   const res = await fetch(url, {
     headers: { "digitransit-subscription-key": API_KEY },
   });

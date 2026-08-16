@@ -866,9 +866,11 @@ export function findUpcomingArrivals(
     for (const leg of conn.legs) {
       if (leg.mode === "WALK" || !leg.trip) continue;
 
-      const legStart = new Date(leg.start.scheduledTime);
-      // Only future departures
-      if (legStart <= now) continue;
+      const effectiveStart = leg.start.estimated?.time
+        ? new Date(leg.start.estimated.time)
+        : new Date(leg.start.scheduledTime);
+      // Only future departures, using the realtime departure when available.
+      if (effectiveStart <= now) continue;
 
       // Check if user is near the departure stop
       if (!leg.from.stop) continue;
@@ -876,9 +878,6 @@ export function findUpcomingArrivals(
       if (dist > MAX_DISTANCE_M) continue;
 
       const delaySec = computeDelaySeconds(leg.start.scheduledTime, leg.start.estimated);
-      const effectiveStart = leg.start.estimated?.time
-        ? new Date(leg.start.estimated.time)
-        : legStart;
       const minutesUntil = Math.round(
         (effectiveStart.getTime() - now.getTime()) / 60000
       );
