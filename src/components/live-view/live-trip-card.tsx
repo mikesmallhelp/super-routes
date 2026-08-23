@@ -143,7 +143,8 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
   const completedVehicles = useMemo(() => {
     if (
       !initialJourneyState ||
-      initialJourneyState.mode !== "on-vehicle" ||
+      (initialJourneyState.mode !== "on-vehicle" &&
+        initialJourneyState.mode !== "waiting") ||
       !initialActiveConnection
     ) {
       return [];
@@ -156,15 +157,19 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
   const continuationStart = useMemo(() => {
     if (
       !initialJourneyState ||
-      initialJourneyState.mode !== "on-vehicle" ||
+      (initialJourneyState.mode !== "on-vehicle" &&
+        initialJourneyState.mode !== "waiting") ||
       !initialActiveConnection
     ) {
       return null;
     }
 
     const activeLeg =
-      preferredLayoutConnection?.connection.legs[preferredLayoutConnection.legIndex] ??
-      initialActiveConnection.legs[initialJourneyState.legIndex];
+      initialJourneyState.mode === "on-vehicle"
+        ? preferredLayoutConnection?.connection.legs[
+            preferredLayoutConnection.legIndex
+          ] ?? initialActiveConnection.legs[initialJourneyState.legIndex]
+        : initialActiveConnection.legs[initialJourneyState.legIndex];
     return {
       origin: {
         latitude: activeLeg.to.lat,
@@ -282,15 +287,15 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
     };
   }, [journeyState, activeConnection, preferredLayoutConnection]);
   const continuation = continuationConnections[0] ?? null;
-  const waitingFutureLegs =
-    journeyState?.mode === "waiting" && layout
-      ? layout.futureAfter.slice(layout.futureAfter[0]?.mode === "WALK" ? 1 : 0)
-      : [];
   const continuationLegs =
     continuation?.legs.slice(
       continuation.legs[0]?.mode === "WALK" && continuation.legs.length > 1 ? 1 : 0
     ) ?? [];
   const hasContinuationTransit = continuationLegs.some((leg) => leg.mode !== "WALK");
+  const waitingFutureLegs =
+    journeyState?.mode === "waiting" && layout && !hasContinuationTransit
+      ? layout.futureAfter.slice(layout.futureAfter[0]?.mode === "WALK" ? 1 : 0)
+      : [];
   const activeStopCode = journeyState?.activeLeg?.stops.find(
     (stop) => stop.status === "current"
   )?.code;
@@ -429,6 +434,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
                       <UpcomingTripCard
                         key={`continuation-${index}`}
                         leg={leg}
+                        earliestCatchTime={continuationStart?.dateTime}
                         syncFromStop={{
                           stopGtfsId: leg.from.stop?.gtfsId,
                           includeRoutes: leg.trip?.routeShortName
@@ -499,6 +505,28 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               }}
             />
           )}
+          {journeyState.mode === "waiting" &&
+            !isFallbackWaitingRoute &&
+            hasContinuationTransit &&
+            continuationLegs.map((leg, index) =>
+              leg.mode === "WALK" ? (
+                <LegCard key={`waiting-continuation-${index}`} leg={leg} variant="future" />
+              ) : (
+                <UpcomingTripCard
+                  key={`waiting-continuation-${index}`}
+                  leg={leg}
+                  earliestCatchTime={continuationStart?.dateTime}
+                  syncFromStop={{
+                    stopGtfsId: leg.from.stop?.gtfsId,
+                    includeRoutes: leg.trip?.routeShortName
+                      ? [leg.trip.routeShortName]
+                      : [],
+                    excludeRoutes: trip.excludedVehicles ?? [],
+                    headsign: leg.trip?.tripHeadsign,
+                  }}
+                />
+              )
+            )}
           {!isFallbackWaitingRoute && waitingFutureLegs.map((leg, index) =>
             leg.mode === "WALK" ? (
               <LegCard key={`waiting-future-${index}`} leg={leg} variant="future" />

@@ -38,9 +38,15 @@ export function UpcomingTripCard({
   const headsign = leg.trip?.tripHeadsign;
   const stops = buildStopList(leg);
   const now = useNow();
+  const syncAfterTime =
+    earliestCatchTime && new Date(earliestCatchTime).getTime() > now
+      ? earliestCatchTime
+      : now > 0
+      ? new Date(now).toISOString()
+      : undefined;
   const stopDepartures = useStopDepartures(
     syncFromStop?.stopGtfsId,
-    syncFromStop?.stopGtfsId && now > 0 ? new Date(now).toISOString() : undefined,
+    syncFromStop?.stopGtfsId ? syncAfterTime : undefined,
     syncFromStop?.includeRoutes ?? [],
     syncFromStop?.excludeRoutes ?? [],
     syncFromStop?.headsign
