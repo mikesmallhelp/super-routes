@@ -665,14 +665,72 @@ export function detectJourneyState(
     `[Detection] Detecting journey state: ${connections.length} connections, user @${userLat.toFixed(5)},${userLon.toFixed(5)}`
   );
 
+  const now = new Date();
   const active = detectActiveLeg(connections, userLat, userLon);
   if (active) {
-    const legIndex = connections[active.connectionIndex].legs.indexOf(active.leg);
+    const connection = connections[active.connectionIndex];
+    const legIndex = connection.legs.indexOf(active.leg);
     const currentStop = active.stops.find((s) => s.status === "current");
-    if (
+    const isAtFinalStop =
       currentStop &&
-      active.stops.indexOf(currentStop) === active.stops.length - 1 &&
-      !hasLaterTransitLeg(connections[active.connectionIndex].legs, legIndex)
+      active.stops.indexOf(currentStop) === active.stops.length - 1;
+    const nextTransitLegIndex = connection.legs.findIndex(
+      (leg, index) => index > legIndex && isTransitLeg(leg)
+    );
+
+    if (isAtFinalStop && nextTransitLegIndex >= 0) {
+      const nextTransitLeg = connection.legs[nextTransitLegIndex];
+      const nextStart = nextTransitLeg.start.estimated?.time
+        ? new Date(nextTransitLeg.start.estimated.time)
+        : new Date(nextTransitLeg.start.scheduledTime);
+      const waitingDistance = getWaitingAnchorDistance(
+        connection,
+        nextTransitLegIndex,
+        userLat,
+        userLon
+      );
+
+      if (
+        nextStart > now &&
+        waitingDistance <=
+          getWaitingMaxDistance(nextTransitLeg, nextTransitLegIndex, connection)
+      ) {
+        const delaySec = computeDelaySeconds(
+          nextTransitLeg.start.scheduledTime,
+          nextTransitLeg.start.estimated
+        );
+        const minutesUntil = Math.round(
+          (nextStart.getTime() - now.getTime()) / 60_000
+        );
+
+        console.log(
+          `[Detection] Waiting at transfer: ${nextTransitLeg.trip?.routeShortName} → ` +
+            `${nextTransitLeg.trip?.tripHeadsign} at ${nextTransitLeg.from.stop?.name}`
+        );
+        return {
+          connectionIndex: active.connectionIndex,
+          legIndex: nextTransitLegIndex,
+          mode: "waiting",
+          matchDistance: waitingDistance,
+          upcomingArrival: {
+            routeShortName: nextTransitLeg.trip!.routeShortName,
+            headsign: nextTransitLeg.trip!.tripHeadsign,
+            mode: nextTransitLeg.mode,
+            stopName: nextTransitLeg.from.stop!.name,
+            stopCode: nextTransitLeg.from.stop!.code,
+            stopGtfsId: nextTransitLeg.from.stop!.gtfsId,
+            minutesUntil,
+            scheduledTime: nextTransitLeg.start.scheduledTime,
+            realtimeTime: nextTransitLeg.start.estimated?.time,
+            delaySeconds: delaySec ?? undefined,
+          },
+        };
+      }
+    }
+
+    if (
+      isAtFinalStop &&
+      !hasLaterTransitLeg(connection.legs, legIndex)
     ) {
       console.log(
         `[Detection] Arrived at final transit stop: ${active.leg.trip?.routeShortName} → ${currentStop.name}`
@@ -700,7 +758,6 @@ export function detectJourneyState(
     };
   }
 
-  const now = new Date();
   for (let ci = 0; ci < connections.length; ci++) {
     const conn = connections[ci];
     for (let li = 0; li < conn.legs.length; li++) {

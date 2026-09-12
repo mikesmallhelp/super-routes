@@ -212,14 +212,13 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
   const continuationSourceLeg = useMemo(() => {
     if (
       !initialJourneyState ||
-      (initialJourneyState.mode !== "on-vehicle" &&
-        initialJourneyState.mode !== "waiting") ||
+      initialJourneyState.mode !== "on-vehicle" ||
       !initialActiveConnection
     ) {
       return null;
     }
 
-    if (initialJourneyState.mode === "on-vehicle" && preferredLayoutConnection) {
+    if (preferredLayoutConnection) {
       return preferredLayoutConnection.connection.legs[
         preferredLayoutConnection.legIndex
       ];
@@ -454,7 +453,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
       : null;
   const waitingFutureLegs =
     journeyState?.mode === "waiting" && layout && !hasContinuationLegs
-      ? layout.futureAfter.slice(layout.futureAfter[0]?.mode === "WALK" ? 1 : 0)
+      ? layout.futureAfter
       : [];
   const activeStopCode = journeyState?.activeLeg?.stops.find(
     (stop) => stop.status === "current"
