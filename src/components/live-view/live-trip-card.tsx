@@ -426,7 +426,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
     (leg) => leg.mode !== "WALK"
   );
   const continuationWaitMinutes =
-    journeyState?.mode === "waiting" &&
+    (journeyState?.mode === "waiting" || journeyState?.mode === "on-vehicle") &&
     continuationStart &&
     firstContinuationTransit
       ? Math.round(
@@ -626,6 +626,14 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               )}
               {hasContinuationLegs && (
                 <>
+                  {transferWait && (
+                    <TransferWait
+                      minutes={transferWait.minutes}
+                      stopName={transferWait.stopName}
+                      startTime={transferWait.startTime}
+                      endTime={transferWait.endTime}
+                    />
+                  )}
                   {displayContinuationLegs.map((leg, index) =>
                     leg.mode === "WALK" ? (
                       <LegCard key={`continuation-${index}`} leg={leg} variant="future" />
