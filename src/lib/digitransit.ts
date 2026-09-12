@@ -424,14 +424,28 @@ export async function fetchStopCoordsByCode(
   const res = await fetch(url, {
     headers: { "digitransit-subscription-key": API_KEY },
   });
-  const data = await res.json();
+  const responseBody = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Stop geocoding request failed with HTTP ${res.status}: ${responseBody.slice(0, 200)}`
+    );
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(responseBody);
+  } catch {
+    throw new Error(
+      "Stop geocoding request returned a non-JSON response."
+    );
+  }
   log("StopByCode response", data);
 
   type GeoFeature = {
     geometry: { coordinates: [number, number] };
     properties: { name: string; addendum?: { GTFS?: { code?: string } } };
   };
-  const feature = (data.features as GeoFeature[] | undefined)?.find(
+  const feature = (data as { features?: GeoFeature[] }).features?.find(
     (f) => f.properties.addendum?.GTFS?.code === code
   );
   if (!feature) return null;

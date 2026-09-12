@@ -328,7 +328,16 @@ export async function GET(request: NextRequest) {
 
   const mockStopCode = env("NEXT_PUBLIC_MOCK_STOP");
   if (mockStopCode) {
-    const stop = await fetchStopCoordsByCode(mockStopCode);
+    let stop: Awaited<ReturnType<typeof fetchStopCoordsByCode>>;
+    try {
+      stop = await fetchStopCoordsByCode(mockStopCode);
+    } catch (error) {
+      console.error(`[Mock] Failed to resolve stop ${mockStopCode}:`, error);
+      return NextResponse.json(
+        { error: `Could not resolve mock stop ${mockStopCode}` },
+        { status: 502 }
+      );
+    }
     if (!stop) {
       return NextResponse.json(
         { error: `Stop not found: ${mockStopCode}` },
