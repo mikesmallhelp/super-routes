@@ -35,8 +35,8 @@ export function LegCard({ leg, variant }: LegCardProps) {
     <Card
       className={
         isPast
-          ? "order-last w-full border-2 border-muted bg-muted/40"
-          : "order-last w-full border-2 border-slate-300 dark:border-slate-700"
+          ? "w-full border-2 border-muted bg-muted/40"
+          : "w-full border-2 border-slate-300 dark:border-slate-700"
       }
     >
       <CardContent className="p-3">

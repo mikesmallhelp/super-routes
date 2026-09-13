@@ -28,11 +28,6 @@ interface LiveTripCardProps {
   onJourneyStateChange: (tripId: string, matchDistance: number | null) => void;
 }
 
-type FallbackRoute = {
-  connection: Connection;
-  legIndex: number;
-};
-
 function ArrivalMessageCard({ hasRemainingWalk }: { hasRemainingWalk: boolean }) {
   return (
     <Card className="w-full border-green-400 border-2">
@@ -217,15 +212,9 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
   const continuationSourceLeg = useMemo(() => {
     if (
       !initialJourneyState ||
+      initialJourneyState.mode !== "on-vehicle" ||
       !initialActiveConnection
     ) {
-      return null;
-    }
-
-    const hasEarlierTransit = initialActiveConnection.legs
-      .slice(0, initialJourneyState.legIndex)
-      .some((leg) => leg.mode !== "WALK" && !!leg.trip);
-    if (initialJourneyState.mode === "waiting" && hasEarlierTransit) {
       return null;
     }
 
@@ -408,39 +397,30 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
       continuation.legs[0]?.mode === "WALK" && continuation.legs.length > 1 ? 1 : 0
     ) ?? [];
   const displayContinuationLegs = continuationLegs.map((leg, index) => {
-    const displayLeg =
-      index === 0 && leg.mode === "WALK" && continuationSourceLeg
-        ? { ...leg, from: continuationSourceLeg.to }
-        : leg;
     const previousLeg = continuationLegs[index - 1];
     const precedingTransitLeg =
       previousLeg && previousLeg.mode !== "WALK"
         ? previousLeg
-        : index === 0
-        ? journeyState?.mode === "waiting"
-          ? layout?.waitingLeg
-          : continuationSourceLeg
+        : index === 0 && journeyState?.mode === "waiting"
+        ? layout?.waitingLeg
         : undefined;
     if (
-      displayLeg.mode !== "WALK" ||
+      leg.mode !== "WALK" ||
       index !== continuationLegs.length - 1 ||
       !precedingTransitLeg
     ) {
-      return displayLeg;
+      return leg;
     }
 
-    const walkStartMs = new Date(displayLeg.start.scheduledTime).getTime();
+    const walkStartMs = new Date(leg.start.scheduledTime).getTime();
     const transitEndMs = new Date(
       precedingTransitLeg.end.estimated?.time ?? precedingTransitLeg.end.scheduledTime
     ).getTime();
     return walkStartMs > transitEndMs
-      ? shiftLegTime(displayLeg, transitEndMs - walkStartMs)
-      : displayLeg;
+      ? shiftLegTime(leg, transitEndMs - walkStartMs)
+      : leg;
   });
-  const isTransferWaitingFallback =
-    journeyState?.mode === "waiting" && !!fallbackArrival;
-  const hasContinuationLegs =
-    displayContinuationLegs.length > 0 && !isTransferWaitingFallback;
+  const hasContinuationLegs = displayContinuationLegs.length > 0;
   const firstContinuationTransit = displayContinuationLegs.find(
     (leg) => leg.mode !== "WALK"
   );
@@ -472,22 +452,8 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
         }
       : null;
   const waitingFutureLegs =
-    journeyState?.mode === "waiting" && layout && !hasContinuationLegs && !fallbackArrival
-      ? layout.futureAfter.map((leg: Leg, index: number, legs: Leg[]) => {
-          const precedingTransit =
-            [...legs.slice(0, index)]
-              .reverse()
-              .find((candidate) => candidate.mode !== "WALK") ?? layout.waitingLeg;
-          if (leg.mode !== "WALK" || !precedingTransit) return leg;
-
-          const transitEndMs = new Date(
-            precedingTransit.end.estimated?.time ?? precedingTransit.end.scheduledTime
-          ).getTime();
-          const walkStartMs = new Date(leg.start.scheduledTime).getTime();
-          return walkStartMs > transitEndMs
-            ? shiftLegTime(leg, transitEndMs - walkStartMs)
-            : leg;
-        })
+    journeyState?.mode === "waiting" && layout && !hasContinuationLegs
+      ? layout.futureAfter
       : [];
   const activeStopCode = journeyState?.activeLeg?.stops.find(
     (stop) => stop.status === "current"
@@ -514,243 +480,21 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
         ) ?? null
     );
   }, [connections, fallbackArrival]);
-  const fallbackWaitingRoute: FallbackRoute | null = (() => {
+  const fallbackWaitingRoute = (() => {
     if (!fallbackArrival) return null;
 
-    let bestMatch:
-      | (FallbackRoute & { distanceMs: number; hasTrailingWalk: boolean })
-      | null = null;
     for (const connection of connections) {
-      for (let legIndex = 0; legIndex < connection.legs.length; legIndex++) {
-        const leg = connection.legs[legIndex];
-        if (
-          leg.trip?.routeShortName !== fallbackArrival.routeShortName ||
-          leg.from.stop?.code !== fallbackArrival.stopCode
-        ) {
-          continue;
-        }
-
-        const distanceMs = Math.abs(
-          new Date(leg.start.scheduledTime).getTime() -
-            new Date(fallbackArrival.scheduledTime).getTime()
-        );
-        const hasTrailingWalk = connection.legs
-          .slice(legIndex + 1)
-          .some((candidate) => candidate.mode === "WALK");
-        if (
-          !bestMatch ||
-          (hasTrailingWalk && !bestMatch.hasTrailingWalk) ||
-          (hasTrailingWalk === bestMatch.hasTrailingWalk &&
-            distanceMs < bestMatch.distanceMs)
-        ) {
-          bestMatch = { connection, legIndex, distanceMs, hasTrailingWalk };
-        }
-      }
-    }
-
-    return bestMatch
-      ? { connection: bestMatch.connection, legIndex: bestMatch.legIndex }
-      : null;
-  })();
-  const fallbackDisplayRoute: FallbackRoute | null =
-    fallbackWaitingRoute ??
-    (fallbackUpcomingLeg
-      ? (() => {
-          for (const connection of connections) {
-            const legIndex = connection.legs.indexOf(fallbackUpcomingLeg);
-            if (legIndex >= 0) return { connection, legIndex };
-          }
-          return null;
-        })()
-      : null);
-  const fallbackTrailingWalk = (() => {
-    if (!fallbackArrival) return null;
-
-    let match: { leg: Leg; precedingTransit: Leg } | null = null;
-    for (const connection of connections) {
-      for (let legIndex = 0; legIndex < connection.legs.length; legIndex++) {
-        const transitLeg = connection.legs[legIndex];
-        if (
-          transitLeg.mode === "WALK" ||
-          transitLeg.trip?.routeShortName !== fallbackArrival.routeShortName
-        ) {
-          continue;
-        }
-
-        const walk = connection.legs
-          .slice(legIndex + 1)
-          .find((candidate) => candidate.mode === "WALK");
-        if (walk) {
-          match = { leg: walk, precedingTransit: transitLeg };
-          break;
-        }
-      }
-      if (match) break;
-    }
-
-    if (!match) {
-      const precedingTransit =
-        fallbackDisplayRoute?.connection.legs
-          .slice(fallbackDisplayRoute.legIndex)
-          .find(
-            (candidate) =>
-              candidate.mode !== "WALK" &&
-              candidate.trip?.routeShortName === fallbackArrival.routeShortName
-          ) ??
-        fallbackUpcomingLeg;
-      if (!precedingTransit) return null;
-
-      const startTime =
-        precedingTransit.end.estimated?.time ?? precedingTransit.end.scheduledTime;
-      const endTime = new Date(new Date(startTime).getTime() + 4 * 60_000).toISOString();
-      return {
-        mode: "WALK",
-        duration: 240,
-        distance: 0,
-        realtimeState: "SCHEDULED",
-        from: precedingTransit.to,
-        to: {
-          name: trip.destinationLabel,
-          lat: trip.destinationCoords.latitude,
-          lon: trip.destinationCoords.longitude,
-          stop: null,
-        },
-        start: { scheduledTime: startTime },
-        end: { scheduledTime: endTime },
-        intermediateStops: null,
-        trip: null,
-      } satisfies Leg;
-    }
-
-    const { leg, precedingTransit } = match;
-    const transitEndMs = new Date(
-      precedingTransit.end.estimated?.time ?? precedingTransit.end.scheduledTime
-    ).getTime();
-    const walkStartMs = new Date(leg.start.scheduledTime).getTime();
-    return walkStartMs > transitEndMs
-      ? shiftLegTime(leg, transitEndMs - walkStartMs)
-      : leg;
-  })();
-  const waitingTrailingWalk = (() => {
-    const waitingLeg = layout?.waitingLeg ?? fallbackUpcomingLeg;
-    if (
-      journeyState?.mode !== "waiting" ||
-      hasContinuationLegs ||
-      !waitingLeg ||
-      waitingLeg.trip?.routeShortName !== "560"
-    ) {
-      return null;
-    }
-
-    const startTime =
-      waitingLeg.end.estimated?.time ?? waitingLeg.end.scheduledTime;
-    return {
-      mode: "WALK",
-      duration: 240,
-      distance: 0,
-      realtimeState: "SCHEDULED",
-      from: waitingLeg.to,
-      to: {
-        name: trip.destinationLabel,
-        lat: trip.destinationCoords.latitude,
-        lon: trip.destinationCoords.longitude,
-        stop: null,
-      },
-      start: { scheduledTime: startTime },
-      end: {
-        scheduledTime: new Date(new Date(startTime).getTime() + 4 * 60_000).toISOString(),
-      },
-      intermediateStops: null,
-      trip: null,
-    } satisfies Leg;
-  })();
-  const continuationTrailingWalk = (() => {
-    const transitLegs = displayContinuationLegs.filter((leg) => leg.mode !== "WALK");
-    const lastTransit = transitLegs.at(-1);
-    if (!lastTransit || lastTransit.trip?.routeShortName !== "560") return null;
-    if (displayContinuationLegs.at(-1)?.mode === "WALK") return null;
-
-    const startTime = lastTransit.end.estimated?.time ?? lastTransit.end.scheduledTime;
-    return {
-      mode: "WALK",
-      duration: 240,
-      distance: 0,
-      realtimeState: "SCHEDULED",
-      from: lastTransit.to,
-      to: {
-        name: trip.destinationLabel,
-        lat: trip.destinationCoords.latitude,
-        lon: trip.destinationCoords.longitude,
-        stop: null,
-      },
-      start: { scheduledTime: startTime },
-      end: {
-        scheduledTime: new Date(new Date(startTime).getTime() + 4 * 60_000).toISOString(),
-      },
-      intermediateStops: null,
-      trip: null,
-    } satisfies Leg;
-  })();
-  const fallbackUpcomingWalk = fallbackUpcomingLeg?.trip?.routeShortName === "560"
-    ? (() => {
-        const startTime =
-          fallbackUpcomingLeg.end.estimated?.time ?? fallbackUpcomingLeg.end.scheduledTime;
-        return {
-          mode: "WALK",
-          duration: 240,
-          distance: 0,
-          realtimeState: "SCHEDULED",
-          from: fallbackUpcomingLeg.to,
-          to: {
-            name: trip.destinationLabel,
-            lat: trip.destinationCoords.latitude,
-            lon: trip.destinationCoords.longitude,
-            stop: null,
-          },
-          start: { scheduledTime: startTime },
-          end: {
-            scheduledTime: new Date(new Date(startTime).getTime() + 4 * 60_000).toISOString(),
-          },
-          intermediateStops: null,
-          trip: null,
-        } satisfies Leg;
-      })()
-    : null;
-  const visible560Leg =
-    (layout?.waitingLeg?.trip?.routeShortName === "560" ? layout.waitingLeg : null) ??
-    fallbackUpcomingLeg ??
-    connections
-      .flatMap((connection) => connection.legs)
-      .find(
+      const legIndex = connection.legs.findIndex(
         (leg) =>
-          leg.trip?.routeShortName === "560" &&
-          leg.from.stop?.code === fallbackArrival?.stopCode
-      ) ??
-    null;
-  const visible560Walk = visible560Leg
-    ? (() => {
-        const startTime = visible560Leg.end.estimated?.time ?? visible560Leg.end.scheduledTime;
-        return {
-          mode: "WALK",
-          duration: 240,
-          distance: 0,
-          realtimeState: "SCHEDULED",
-          from: visible560Leg.to,
-          to: {
-            name: trip.destinationLabel,
-            lat: trip.destinationCoords.latitude,
-            lon: trip.destinationCoords.longitude,
-            stop: null,
-          },
-          start: { scheduledTime: startTime },
-          end: {
-            scheduledTime: new Date(new Date(startTime).getTime() + 4 * 60_000).toISOString(),
-          },
-          intermediateStops: null,
-          trip: null,
-        } satisfies Leg;
-      })()
-    : null;
+          leg.trip?.routeShortName === fallbackArrival.routeShortName &&
+          leg.from.stop?.code === fallbackArrival.stopCode &&
+          leg.start.scheduledTime === fallbackArrival.scheduledTime
+      );
+      if (legIndex >= 0) return { connection, legIndex };
+    }
+
+    return null;
+  })();
   // In on-vehicle mode the re-planned continuation is the authoritative,
   // catchable next-step for the journey. The "nearby upcoming route" fallback is
   // meant for the pre-boarding/waiting context; in on-vehicle mode it misfires —
@@ -774,7 +518,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
     const currentLeg = legs[fallbackWaitingRoute.legIndex];
     const nextTransitLeg = legs
       .slice(fallbackWaitingRoute.legIndex + 1)
-      .find((leg: Leg) => leg.mode !== "WALK");
+      .find((leg) => leg.mode !== "WALK");
     const currentLegEndTime =
       currentLeg.end.estimated?.time ?? currentLeg.end.scheduledTime;
     const nextTransitStartTime =
@@ -843,7 +587,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
       )}
 
       {isExpanded && journeyState && activeConnection && layout ? (
-        <div className="flex flex-col space-y-2">
+        <div className="space-y-2">
           {stopArrival && (
             <UpcomingArrivals
               arrivals={[stopArrival]}
@@ -899,9 +643,6 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
                       />
                     )
                   )}
-                  {continuationTrailingWalk && (
-                    <LegCard leg={continuationTrailingWalk} variant="future" />
-                  )}
                 </>
               )}
             </>
@@ -927,54 +668,28 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               )}
               {fallbackWaitingRoute.connection.legs
                 .slice(fallbackWaitingRoute.legIndex + 1)
-                .map((leg: Leg, index: number, legs: Leg[]) => {
-                  if (leg.mode === "WALK") return null;
-                  const previousTransit = [...legs.slice(0, index)]
-                    .reverse()
-                    .find((candidate) => candidate.mode !== "WALK") ??
-                    fallbackWaitingRoute.connection.legs[fallbackWaitingRoute.legIndex];
-                  const legEnd = previousTransit
-                    ? new Date(
-                        previousTransit.end.estimated?.time ??
-                          previousTransit.end.scheduledTime
-                      ).getTime()
-                    : null;
-                  const walkStart = new Date(leg.start.scheduledTime).getTime();
-                  const displayLeg =
-                    leg.mode === "WALK" && previousTransit && legEnd !== null && walkStart > legEnd
-                      ? shiftLegTime(leg, legEnd - walkStart)
-                      : leg;
-
-                  return displayLeg.mode === "WALK" ? null : (
-                    <UpcomingTripCard key={`fallback-future-${index}`} leg={displayLeg} />
-                  );
-                })}
-              {fallbackTrailingWalk && (
-                <LegCard leg={fallbackTrailingWalk} variant="future" />
-              )}
-              {waitingTrailingWalk && !fallbackTrailingWalk && (
-                <LegCard leg={waitingTrailingWalk} variant="future" />
-              )}
+                .map((leg, index) =>
+                  leg.mode === "WALK" ? (
+                    <LegCard key={`fallback-future-${index}`} leg={leg} variant="future" />
+                  ) : (
+                    <UpcomingTripCard key={`fallback-future-${index}`} leg={leg} />
+                  )
+                )}
             </>
           )}
           {!isFallbackWaitingRoute &&
             isWaitingAtActiveStop &&
             fallbackArrival &&
             fallbackUpcomingLeg && (
-            <>
-              <UpcomingTripCard
-                leg={fallbackUpcomingLeg}
-                syncFromStop={{
-                  stopGtfsId: fallbackArrival.stopGtfsId,
-                  includeRoutes: [fallbackArrival.routeShortName],
-                  excludeRoutes: trip.excludedVehicles ?? [],
-                  headsign: fallbackArrival.headsign,
-                }}
-              />
-              {fallbackUpcomingWalk && (
-                <LegCard leg={fallbackUpcomingWalk} variant="future" />
-              )}
-            </>
+            <UpcomingTripCard
+              leg={fallbackUpcomingLeg}
+              syncFromStop={{
+                stopGtfsId: fallbackArrival.stopGtfsId,
+                includeRoutes: [fallbackArrival.routeShortName],
+                excludeRoutes: trip.excludedVehicles ?? [],
+                headsign: fallbackArrival.headsign,
+              }}
+            />
           )}
           {journeyState.mode === "arrived" && (
             <ArrivalMessageCard hasRemainingWalk={layout.hasRemainingWalk} />
@@ -995,12 +710,6 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               }}
             />
           )}
-          {visible560Walk &&
-            fallbackArrival?.routeShortName === "560" &&
-            !fallbackTrailingWalk &&
-            !waitingTrailingWalk && (
-              <LegCard leg={visible560Walk} variant="future" />
-            )}
           {journeyState.mode === "waiting" &&
             !isFallbackWaitingRoute &&
             hasContinuationLegs &&
@@ -1032,6 +741,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               <UpcomingTripCard key={`waiting-future-${index}`} leg={leg} />
             )
           )}
+
           {/* Use the original route only while the current-location query is pending. */}
           {journeyState.mode === "on-vehicle" && !hasContinuationLegs && layout.futureBefore.map((leg, i) => (
             <LegCard key={`fb-${i}`} leg={leg} variant="future" />
@@ -1043,10 +753,7 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               earliestCatchTime={layout.activeLegEndTime}
             />
           )}
-          {journeyState.mode === "on-vehicle" &&
-            !fallbackArrival &&
-            !hasContinuationLegs &&
-            layout.futureAfter.map((leg, i) => (
+          {journeyState.mode === "on-vehicle" && !hasContinuationLegs && layout.futureAfter.map((leg, i) => (
             <LegCard key={`fa-${i}`} leg={leg} variant="future" />
           ))}
         </div>
@@ -1061,71 +768,32 @@ export function LiveTripCard({ trip, isExpanded, onJourneyStateChange }: LiveTri
               headsign={fallbackArrival.headsign}
             />
           )}
-          {isExpanded && fallbackArrival && fallbackDisplayRoute && (
-            <>
-              <UpcomingTripCard
-                leg={fallbackDisplayRoute.connection.legs[fallbackDisplayRoute.legIndex]}
-                syncFromStop={{
-                  stopGtfsId: fallbackArrival.stopGtfsId,
-                  includeRoutes: [fallbackArrival.routeShortName],
-                  excludeRoutes: trip.excludedVehicles ?? [],
-                  headsign: fallbackArrival.headsign,
-                }}
-              />
-              {fallbackDisplayRoute.connection.legs
-                .slice(fallbackDisplayRoute.legIndex + 1)
-                .map((leg: Leg, index: number, legs: Leg[]) => {
-                  if (leg.mode === "WALK") return null;
-                  const previousTransit = [...legs.slice(0, index)]
-                    .reverse()
-                    .find((candidate) => candidate.mode !== "WALK") ??
-                    fallbackDisplayRoute.connection.legs[fallbackDisplayRoute.legIndex];
-                  const legEnd = previousTransit
-                    ? new Date(
-                        previousTransit.end.estimated?.time ??
-                          previousTransit.end.scheduledTime
-                      ).getTime()
-                    : null;
-                  const walkStart = new Date(leg.start.scheduledTime).getTime();
-                  const displayLeg =
-                    leg.mode === "WALK" && previousTransit && legEnd !== null && walkStart > legEnd
-                      ? shiftLegTime(leg, legEnd - walkStart)
-                      : leg;
-
-                  return displayLeg.mode === "WALK" ? null : (
-                    <UpcomingTripCard key={`fallback-no-state-${index}`} leg={displayLeg} />
-                  );
-                })}
-              {fallbackTrailingWalk && (
-                <LegCard leg={fallbackTrailingWalk} variant="future" />
-              )}
-            </>
+          {isExpanded && fallbackArrival && fallbackUpcomingLeg && (
+            <UpcomingTripCard
+              leg={fallbackUpcomingLeg}
+              syncFromStop={{
+                stopGtfsId: fallbackArrival.stopGtfsId,
+                includeRoutes: [fallbackArrival.routeShortName],
+                excludeRoutes: trip.excludedVehicles ?? [],
+                headsign: fallbackArrival.headsign,
+              }}
+            />
           )}
-          {waitingTrailingWalk && !fallbackTrailingWalk && (
-            <LegCard leg={waitingTrailingWalk} variant="future" />
-          )}
-          {visible560Walk &&
-            fallbackArrival?.routeShortName === "560" &&
-            !fallbackTrailingWalk &&
-            !waitingTrailingWalk && (
-              <LegCard leg={visible560Walk} variant="future" />
-            )}
           {!isLoading && connections.length === 0 && !error && (
             <p className="text-sm text-muted-foreground">
               Ei reittivaihtoehtoja juuri nyt.
             </p>
           )}
 
-          {!fallbackDisplayRoute &&
-            connections.map((conn, i) => (
-              <ConnectionCard
-                key={`${conn.start}-${i}`}
-                connection={conn}
-                index={i + 1}
-                originLabel={trip.originLabel}
-                destinationLabel={trip.destinationLabel}
-              />
-            ))}
+          {connections.map((conn, i) => (
+            <ConnectionCard
+              key={`${conn.start}-${i}`}
+              connection={conn}
+              index={i + 1}
+              originLabel={trip.originLabel}
+              destinationLabel={trip.destinationLabel}
+            />
+          ))}
         </>
       )}
     </div>

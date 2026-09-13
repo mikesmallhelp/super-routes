@@ -8,12 +8,7 @@ const globalForPrisma = globalThis as unknown as {
 
 export function getPrisma() {
   if (!globalForPrisma.prisma) {
-    const pool = new Pool({
-      connectionString: process.env.PRISMA_DATABASE_URL,
-      connectionTimeoutMillis: 5_000,
-      query_timeout: 10_000,
-      statement_timeout: 10_000,
-    });
+    const pool = new Pool({ connectionString: process.env.PRISMA_DATABASE_URL });
     const adapter = new PrismaPg(pool);
     globalForPrisma.prisma = new PrismaClient({ adapter });
   }
